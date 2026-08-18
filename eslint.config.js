@@ -15,7 +15,9 @@ export default tseslint.config(
   },
   {
     // The architectural rule from the spec, enforced rather than documented.
-    files: ['src/domain/**/*.ts', 'src/parsers/**/*.ts'],
+    // .tsx as well as .ts: neither layer has a component in it today, and the
+    // rule is what keeps it that way rather than the current file listing.
+    files: ['src/domain/**/*.{ts,tsx}', 'src/parsers/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -24,7 +26,14 @@ export default tseslint.config(
             {
               // Path-shaped rather than alias-shaped, so the relative forms these
               // layers already use for their own siblings are caught too.
-              group: ['**/ui', '**/ui/**', '**/services', '**/services/**'],
+              group: [
+                '**/ui',
+                '**/ui/**',
+                '**/services',
+                '**/services/**',
+                '**/enrich',
+                '**/enrich/**',
+              ],
               message: 'domain/ and parsers/ must stay free of UI and I/O dependencies.',
             },
             {
