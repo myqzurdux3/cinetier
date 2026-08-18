@@ -9,8 +9,7 @@ Everything runs in your browser — no account, no upload, no server.
 
 [Open Cinetier](https://myqzurdux3.github.io/cinetier/)
 
-_In development — that link still opens a placeholder. The import and board
-screens are what land next; what follows describes where this is going._
+> **Status:** in development — importing and browsing your library work today. Filtering and the tier board land next.
 
 </div>
 

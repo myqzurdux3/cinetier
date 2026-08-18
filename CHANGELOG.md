@@ -20,3 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   distance from the public rating, and a top-N limit, combining freely.
 - Default S/A/B/C/D/F tiers, with a board that either starts pre-filled from your
   own ratings or starts empty for ranking by hand.
+- Import screen: drop an IMDb `ratings.csv` or a Letterboxd export `.zip` and see your library.
+- Posters and public ratings from TMDB, filled in progressively and cached locally.
+- The imported library is remembered between visits.
