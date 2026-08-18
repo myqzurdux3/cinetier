@@ -7,7 +7,7 @@ import type { Film } from './film';
 export function normalizeTitle(title: string): string {
   return title
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // combining diacritical marks
+    .replace(/[\u0300-\u036f]/g, '') // combining diacritical marks
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
