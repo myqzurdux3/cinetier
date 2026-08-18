@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { mergeLibraries } from '@/domain/dedupe';
+import { parseImdbRatings } from '@/parsers/imdb';
+import { parseLetterboxdExport } from '@/parsers/letterboxd';
 import type { Film } from '@/domain/film';
 
 function film(overrides: Partial<Film> & Pick<Film, 'title'>): Film {
@@ -21,6 +24,17 @@ function film(overrides: Partial<Film> & Pick<Film, 'title'>): Film {
     source: 'imdb',
     ...overrides,
   };
+}
+
+/** Every ordering of the given items. */
+function permutations<T>(items: readonly T[]): T[][] {
+  if (items.length <= 1) return [[...items]];
+  return items.flatMap((item, index) =>
+    permutations([...items.slice(0, index), ...items.slice(index + 1)]).map((rest) => [
+      item,
+      ...rest,
+    ]),
+  );
 }
 
 describe('mergeLibraries', () => {
@@ -158,5 +172,134 @@ describe('mergeLibraries', () => {
     expect(result).toHaveLength(1);
     // The merged result has the shared IMDb ID
     expect(result[0]?.imdbId).toBe('ttFoo');
+  });
+
+  // The chain from the review: three records share an identifier, and a fourth
+  // reaches one of them by title and year. All four are transitively one film.
+  const chain: Film[] = [
+    film({ title: 'Matrix, The', imdbId: 'tt1', year: 1999, rating: 70 }),
+    film({ title: 'Matrix', imdbId: 'tt1', year: 1999, rating: 90 }),
+    film({ title: 'Something Else', imdbId: 'tt1', year: 1999, runtimeMinutes: 136 }),
+    film({ title: 'Matrix', imdbId: null, year: 1999, source: 'letterboxd', rating: 80 }),
+  ];
+
+  it('clusters a transitive chain in every order the libraries can arrive in', () => {
+    const failures: string[] = [];
+
+    for (const order of permutations(chain)) {
+      const result = mergeLibraries(...order.map((one) => [one]));
+      if (result.length !== 1 || result[0]?.imdbId !== 'tt1') {
+        failures.push(
+          `${order.map((one) => one.title).join(' | ')} => ${result.length} film(s), ` +
+            `imdbId=${String(result[0]?.imdbId)}`,
+        );
+      }
+    }
+
+    expect(failures).toEqual([]);
+  });
+
+  it('clusters a transitive chain in every order the records can arrive in', () => {
+    const failures: string[] = [];
+
+    for (const order of permutations(chain)) {
+      const result = mergeLibraries(order);
+      if (result.length !== 1 || result[0]?.imdbId !== 'tt1') {
+        failures.push(
+          `${order.map((one) => one.title).join(' | ')} => ${result.length} film(s), ` +
+            `imdbId=${String(result[0]?.imdbId)}`,
+        );
+      }
+    }
+
+    expect(failures).toEqual([]);
+  });
+
+  it('returns an identical library however the records are split and ordered', () => {
+    // Six records forming three clusters: a transitive chain, a pair matched by
+    // title alone, and a lone record no other one touches.
+    const records: Film[] = [
+      film({
+        title: 'The Matrix',
+        imdbId: 'tt0133093',
+        year: 1999,
+        rating: 90,
+        genres: ['Action'],
+      }),
+      film({ title: 'Matrix, The', imdbId: 'tt0133093', year: 1999 }),
+      film({
+        title: 'The Matrix',
+        imdbId: null,
+        year: 1999,
+        source: 'letterboxd',
+        isRewatch: true,
+      }),
+      film({ title: 'Amélie', imdbId: null, year: 2001, runtimeMinutes: 122 }),
+      film({ title: 'Amelie', imdbId: null, year: 2001, source: 'letterboxd', rating: 80 }),
+      film({ title: 'Dune', imdbId: 'tt0087182', year: 1984 }),
+    ];
+
+    const expected = mergeLibraries(records);
+    expect(expected).toHaveLength(3);
+
+    for (const order of permutations(records)) {
+      expect(mergeLibraries(order)).toEqual(expected);
+      expect(mergeLibraries(...order.map((one) => [one]))).toEqual(expected);
+      expect(mergeLibraries(order.slice(0, 2), order.slice(2, 4), order.slice(4))).toEqual(
+        expected,
+      );
+    }
+  });
+
+  it('keeps every field when three records are chained by identifier and title', () => {
+    const x = [
+      film({ title: 'Foo', year: 2000, imdbId: 'ttX', genres: ['Drama'], runtimeMinutes: 120 }),
+    ];
+    const y = [film({ title: 'Bar', year: 2000, imdbId: null, source: 'letterboxd', rating: 80 })];
+    const z = [
+      film({ title: 'Bar', year: 2000, imdbId: 'ttX', watchedAt: new Date('2024-01-01') }),
+    ];
+
+    const result = mergeLibraries(x, y, z);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      imdbId: 'ttX',
+      genres: ['Drama'],
+      runtimeMinutes: 120,
+      rating: 80,
+    });
+    expect(result[0]?.watchedAt).toEqual(new Date('2024-01-01'));
+  });
+});
+
+describe('mergeLibraries on real exports', () => {
+  const imdb = parseImdbRatings(readFileSync('tests/fixtures/imdb-ratings.csv', 'utf8')).films;
+  const letterboxd = parseLetterboxdExport({
+    diary: readFileSync('tests/fixtures/letterboxd-diary.csv', 'utf8'),
+    ratings: readFileSync('tests/fixtures/letterboxd-ratings.csv', 'utf8'),
+    watched: readFileSync('tests/fixtures/letterboxd-watched.csv', 'utf8'),
+  }).films;
+
+  it('folds the two exports into one library, whichever order they arrive in', () => {
+    const forward = mergeLibraries(imdb, letterboxd);
+    const backward = mergeLibraries(letterboxd, imdb);
+
+    expect(forward).toHaveLength(9);
+    expect(backward).toEqual(forward);
+  });
+
+  it('keeps the two Dune releases apart', () => {
+    const dune = mergeLibraries(imdb, letterboxd).filter((one) => one.title === 'Dune');
+    expect(dune.map((one) => one.year).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([1984, 2021]);
+  });
+
+  it('takes metadata from IMDb and watch history from Letterboxd', () => {
+    const matrix = mergeLibraries(imdb, letterboxd).find((one) => one.imdbId === 'tt0133093');
+
+    expect(matrix?.genres).toEqual(['Action', 'Sci-Fi']);
+    expect(matrix?.watchedAt).toEqual(new Date('2025-03-09'));
+    expect(matrix?.watchedAtIsApproximate).toBe(false);
+    expect(matrix?.isRewatch).toBe(true);
   });
 });
