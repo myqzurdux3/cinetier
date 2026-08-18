@@ -15,8 +15,8 @@ const STEPS: Record<ImportSource, string[]> = {
     'You will be sent a ratings.csv file — drop it below.',
   ],
   letterboxd: [
-    'Sign in to Letterboxd and open Settings.',
-    'Go to the Data tab and choose Export your data.',
+    'Sign in to Letterboxd and open Settings from your username menu.',
+    'Go to the Import & Export tab and choose Export Your Data.',
     'Drop the .zip below exactly as you downloaded it — no need to unpack it.',
   ],
 };
@@ -43,6 +43,13 @@ export function ImportGuide({ source, onBack, onImported }: ImportGuideProps) {
         <p className="rounded border border-line bg-surface p-4 text-sm text-ink-dim">
           IMDb does not export watch dates — only the date you rated a film. Cinetier uses that
           instead and labels it as an estimate, so date filters stay honest.
+        </p>
+      )}
+
+      {source === 'letterboxd' && (
+        <p className="rounded border border-line bg-surface p-4 text-sm text-ink-dim">
+          Letterboxd currently restricts data export to Letterboxd Pro subscribers, so a free
+          account cannot produce this file. An IMDb export works on any account, free or paid.
         </p>
       )}
 

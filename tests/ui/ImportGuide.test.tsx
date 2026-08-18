@@ -27,4 +27,9 @@ describe('ImportGuide', () => {
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(onBack).toHaveBeenCalled();
   });
+
+  it('warns Letterboxd users that export requires a Pro subscription', () => {
+    render(<ImportGuide source="letterboxd" onBack={vi.fn()} onImported={vi.fn()} />);
+    expect(screen.getByText(/Letterboxd Pro/i)).toBeInTheDocument();
+  });
 });
