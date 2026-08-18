@@ -147,16 +147,21 @@ describe('enrichLibrary', () => {
     expect(result[0]!.posterPath).toBeNull();
   });
 
-  it('re-merges once enrichment gives a Letterboxd film its IMDb identifier', async () => {
+  it('re-merges once enrichment gives two records the same TMDB identifier', async () => {
     vi.mocked(lookupByImdbId).mockResolvedValue({
       tmdbId: 603,
       imdbId: 'tt0133093',
       posterPath: '/m.jpg',
       publicRating: 82,
     });
+    // searchByTitle never returns an imdbId in production — TMDB's search endpoint
+    // does not report one, only `find`-by-id does, and that requires already having
+    // one. So the Letterboxd side of this match can only ever gain a tmdbId, never
+    // an imdbId; dedupe has to be able to fold the two records together on that
+    // alone, which is what this test (and the dedupe fix it relies on) proves.
     vi.mocked(searchByTitle).mockResolvedValue({
       tmdbId: 603,
-      imdbId: 'tt0133093',
+      imdbId: null,
       posterPath: '/m.jpg',
       publicRating: 82,
     });
