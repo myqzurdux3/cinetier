@@ -11,11 +11,32 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   test: {
-    environment: 'node',
-    include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'core',
+          environment: 'node',
+          include: ['tests/domain/**/*.test.ts', 'tests/parsers/**/*.test.ts', 'src/**/*.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'ui',
+          environment: 'jsdom',
+          include: [
+            'tests/ui/**/*.test.tsx',
+            'tests/services/**/*.test.ts',
+            'tests/enrich/**/*.test.ts',
+          ],
+          setupFiles: ['tests/ui/setup.ts'],
+        },
+      },
+    ],
     coverage: {
       provider: 'v8',
-      include: ['src/domain/**', 'src/parsers/**'],
+      include: ['src/domain/**', 'src/parsers/**', 'src/services/**', 'src/enrich/**', 'src/ui/**'],
       // The definition of done for the pure layers, enforced by CI rather than
       // by a sentence in a document.
       thresholds: { statements: 90, branches: 85, functions: 90, lines: 90 },

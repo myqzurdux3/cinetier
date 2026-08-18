@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
   { ignores: ['dist', 'coverage', 'node_modules'] },
@@ -55,6 +56,14 @@ export default tseslint.config(
         { name: 'indexedDB', message: 'Storage access belongs in services/.' },
         { name: 'process', message: 'domain/ and parsers/ run in the browser, not in Node.' },
       ],
+    },
+  },
+  {
+    files: ['src/ui/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
     },
   },
 );
