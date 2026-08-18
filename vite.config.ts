@@ -27,6 +27,7 @@ export default defineConfig({
           environment: 'jsdom',
           include: [
             'tests/ui/**/*.test.tsx',
+            'tests/ui/**/*.test.ts',
             'tests/services/**/*.test.ts',
             'tests/enrich/**/*.test.ts',
           ],
