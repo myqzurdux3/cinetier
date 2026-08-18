@@ -27,6 +27,15 @@ export default function App() {
   // pre-empt the restore is the only thing immune to that.
   const restoreCancelled = useRef(false);
 
+  // The same idea one step further, for enrichment. An enrichment run outlives
+  // the screen that started it — it reports per resolved film for seconds or
+  // minutes, and "Import a different export" sits right beside its progress —
+  // so a reset or a second import can easily land mid-run. Each run takes the
+  // current id and checks it before every write; anything that discards a
+  // library bumps the id, which makes every later callback from the run that
+  // produced it a no-op. Nothing else distinguishes two runs from each other.
+  const runId = useRef(0);
+
   useEffect(() => {
     loadLibrary()
       .then((restored) => {
@@ -40,15 +49,18 @@ export default function App() {
   const onImported = useCallback(async (outcome: ImportOutcome) => {
     if (outcome.status !== 'ok') return;
     restoreCancelled.current = true;
+    const id = ++runId.current;
     setFilms(outcome.films);
     setWarnings(outcome.warnings);
     setEnriching({ done: 0, total: outcome.films.length });
 
     const enriched = await enrichLibrary(outcome.films, (progress) => {
+      if (runId.current !== id) return;
       setFilms(progress.films);
       setEnriching({ done: progress.done, total: progress.total });
     });
 
+    if (runId.current !== id) return;
     setFilms(enriched);
     setEnriching(null);
     await saveLibrary(enriched);
@@ -56,6 +68,7 @@ export default function App() {
 
   function reset() {
     restoreCancelled.current = true;
+    runId.current += 1;
     clearLibrary().catch((error: unknown) => {
       console.error('Failed to clear the saved library', error);
     });
@@ -91,7 +104,14 @@ export default function App() {
           <ImportGuide
             source={source}
             onBack={() => setSource(null)}
-            onImported={(outcome) => void onImported(outcome)}
+            onImported={(outcome) => {
+              // Neither the enrichment nor the save that onImported awaits has
+              // a handler of its own, and DropZone cannot await this callback,
+              // so an unhandled rejection would be the only trace of a failure.
+              onImported(outcome).catch((error: unknown) => {
+                console.error('Failed to finish importing the library', error);
+              });
+            }}
           />
         )}
       </div>

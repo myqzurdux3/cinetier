@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import App from '@/ui/App';
 import { loadLibrary, saveLibrary, clearLibrary } from '@/services/library';
-import { enrichLibrary } from '@/enrich/enrichLibrary';
+import { enrichLibrary, type EnrichProgress } from '@/enrich/enrichLibrary';
 import type { Film } from '@/domain/film';
 
 vi.mock('@/services/library', () => ({
@@ -163,6 +163,110 @@ describe('App persistence', () => {
     await waitFor(() => expect(consoleError).toHaveBeenCalled());
     // The screen still resets even though the underlying delete failed.
     expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
+
+    consoleError.mockRestore();
+  });
+});
+
+describe('App enrichment races', () => {
+  /**
+   * Hands the test control of every enrichLibrary call: the promise it returned
+   * and the progress callback it was given, so a run can be made to report and
+   * settle long after the user has moved on.
+   */
+  function captureEnrichRuns() {
+    const runs: {
+      films: Film[];
+      onProgress: (progress: EnrichProgress) => void;
+      resolve: (films: Film[]) => void;
+    }[] = [];
+
+    vi.mocked(enrichLibrary).mockImplementation((films, onProgress) => {
+      const settled = deferred<Film[]>();
+      runs.push({ films, onProgress, resolve: settled.resolve });
+      return settled.promise;
+    });
+
+    return runs;
+  }
+
+  function library(size: number): Film[] {
+    return Array.from({ length: size }, (_, index) => film(`f${index}`));
+  }
+
+  it('ignores a run that reports progress after the user has reset', async () => {
+    const runs = captureEnrichRuns();
+
+    render(<App />);
+    await importFixture();
+
+    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
+    await userEvent.click(resetButton);
+    expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
+
+    // The discarded run keeps resolving films one by one, then finishes.
+    const stale = library(3);
+    act(() => {
+      runs[0]!.onProgress({ films: stale, done: 1, total: 3 });
+    });
+    expect(
+      screen.queryByRole('button', { name: /import a different export/i }),
+    ).not.toBeInTheDocument();
+
+    runs[0]!.resolve(stale);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The import screen is still there, and the discarded library was never
+    // written back over the storage the reset just cleared.
+    expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /import a different export/i }),
+    ).not.toBeInTheDocument();
+    expect(saveLibrary).not.toHaveBeenCalled();
+  });
+
+  it('keeps the second import when the first is still enriching', async () => {
+    const runs = captureEnrichRuns();
+
+    render(<App />);
+    await importFixture();
+
+    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
+    await userEvent.click(resetButton);
+    await importFixture();
+    await waitFor(() => expect(runs).toHaveLength(2));
+
+    const fresh = library(1);
+    runs[1]!.resolve(fresh);
+    await waitFor(() => expect(saveLibrary).toHaveBeenCalledWith(fresh));
+    expect(screen.getByText(/1 films/)).toBeInTheDocument();
+
+    // Only now does the abandoned first run report and finish.
+    const stale = library(3);
+    act(() => {
+      runs[0]!.onProgress({ films: stale, done: 3, total: 3 });
+    });
+    runs[0]!.resolve(stale);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByText(/1 films/)).toBeInTheDocument();
+    expect(screen.queryByText(/3 films/)).not.toBeInTheDocument();
+    expect(saveLibrary).toHaveBeenCalledTimes(1);
+    expect(saveLibrary).not.toHaveBeenCalledWith(stale);
+  });
+
+  it('logs rather than throwing when saving the enriched library fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(saveLibrary).mockRejectedValue(new Error('IndexedDB is unavailable'));
+
+    render(<App />);
+    await importFixture();
+
+    await waitFor(() => expect(consoleError).toHaveBeenCalled());
+    // The library the user just imported is still on screen.
+    expect(screen.getByRole('button', { name: /import a different export/i })).toBeInTheDocument();
 
     consoleError.mockRestore();
   });
