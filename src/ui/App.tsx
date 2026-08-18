@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Shell } from './Shell';
 import { SourcePicker, type ImportSource } from './import/SourcePicker';
 import { ImportGuide } from './import/ImportGuide';
@@ -15,19 +15,31 @@ export default function App() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [enriching, setEnriching] = useState<{ done: number; total: number } | null>(null);
 
-  // Restore whatever was saved last time. Guarded with the functional setFilms
-  // form so a library restored after this promise settles can never clobber a
-  // fresh import the user has already started in the meantime: by the time
-  // onImported has called setFilms with real data, `current` here is no
-  // longer null, so the restore becomes a no-op instead of a takeover.
+  // Restore whatever was saved last time. `restoreCancelled` is set the moment
+  // the user does anything that should win over the restore — starts an
+  // import, or resets — so the restore's own .then() can check it and no-op
+  // no matter how late it resolves. This is deliberately not inferred from
+  // `films` (e.g. "only restore if films is still null"): films can go
+  // non-null and back to null again (import, then reset) before this promise
+  // ever settles, and at that point `films === null` would look exactly like
+  // "nothing happened yet" even though the user explicitly discarded a
+  // library in between. A ref set synchronously by the actions that should
+  // pre-empt the restore is the only thing immune to that.
+  const restoreCancelled = useRef(false);
+
   useEffect(() => {
-    void loadLibrary().then((restored) => {
-      if (restored) setFilms((current) => current ?? restored);
-    });
+    loadLibrary()
+      .then((restored) => {
+        if (restored && !restoreCancelled.current) setFilms(restored);
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to restore the saved library', error);
+      });
   }, []);
 
   const onImported = useCallback(async (outcome: ImportOutcome) => {
     if (outcome.status !== 'ok') return;
+    restoreCancelled.current = true;
     setFilms(outcome.films);
     setWarnings(outcome.warnings);
     setEnriching({ done: 0, total: outcome.films.length });
@@ -43,7 +55,10 @@ export default function App() {
   }, []);
 
   function reset() {
-    void clearLibrary();
+    restoreCancelled.current = true;
+    clearLibrary().catch((error: unknown) => {
+      console.error('Failed to clear the saved library', error);
+    });
     setFilms(null);
     setWarnings([]);
     setEnriching(null);
