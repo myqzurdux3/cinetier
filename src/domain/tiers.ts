@@ -68,6 +68,11 @@ export function moveFilm(
   toTierId: string | null,
   toIndex: number,
 ): TierBoard {
+  const known =
+    board.pool.includes(filmId) ||
+    Object.values(board.placements).some((ids) => ids.includes(filmId));
+  if (!known) return board;
+
   const placements: Record<string, string[]> = Object.fromEntries(
     Object.entries(board.placements).map(([id, ids]) => [id, ids.filter((f) => f !== filmId)]),
   );

@@ -108,4 +108,14 @@ describe('moveFilm', () => {
     moveFilm(original, 'a', 'F', 0);
     expect(JSON.stringify(original)).toBe(snapshot);
   });
+
+  it('ignores a film id that is not on the board', () => {
+    const board = autoFillBoard(films);
+    expect(moveFilm(board, 'not-a-real-id', 'S', 0)).toBe(board);
+  });
+
+  it('ignores a tier id that does not exist', () => {
+    const board = autoFillBoard(films);
+    expect(moveFilm(board, 'a', 'NOPE', 0)).toBe(board);
+  });
 });
