@@ -10,7 +10,7 @@ export type ImportOutcome =
   | { status: 'error'; message: string; hint: string };
 
 const GENERIC_HINT =
-  'Drop an IMDb ratings.csv, or a Letterboxd export .zip — or the diary.csv, ratings.csv and watched.csv from inside it.';
+  'Drop an IMDb ratings.csv, or a Letterboxd export .zip — or the diary.csv and ratings.csv from inside it.';
 
 /** An IMDb ratings export is identified by its columns, since its name varies. */
 function looksLikeImdb(header: string): boolean {
