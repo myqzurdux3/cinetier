@@ -10,7 +10,7 @@ export interface LetterboxdFiles {
 }
 
 const HINT =
-  'In Letterboxd, go to Settings > Data > Export your data, then upload the .zip file without unpacking it.';
+  'In Letterboxd, open Settings > Import & Export and choose Export Your Data, then upload the .zip file without unpacking it.';
 
 /** The slug at the end of a Letterboxd URI, used as a stable per-film identifier. */
 function slugFromUri(uri: string | undefined): string | null {

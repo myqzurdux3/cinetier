@@ -9,7 +9,7 @@ configure({ useWebWorkers: false });
 const WANTED = ['diary', 'ratings', 'watched'] as const;
 
 const HINT =
-  'In Letterboxd, go to Settings > Data > Export your data, then upload the .zip exactly as you received it.';
+  'In Letterboxd, open Settings > Import & Export and choose Export Your Data, then upload the .zip exactly as you received it.';
 
 /**
  * Pull the three CSV files Cinetier reads out of a Letterboxd export archive.

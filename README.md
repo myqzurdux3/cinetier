@@ -42,8 +42,10 @@ your ratings and never your history.
 **IMDb** — Your Ratings page > the three-dot menu > Export. You will receive
 `ratings.csv` by email or download.
 
-**Letterboxd** — Settings > Data > Export your data. Upload the `.zip` as it is;
-Cinetier unpacks it for you.
+**Letterboxd** — Settings > Import & Export > Export Your Data. Upload the
+`.zip` as it is; Cinetier unpacks it for you. If you do not see an export option
+in your settings, Letterboxd may require a Pro subscription for it; an IMDb
+export works on any account, free or paid.
 
 Because IMDb does not export watch dates, Cinetier uses your rating date instead
 for IMDb imports, and labels it as such. Letterboxd diary entries carry real
@@ -75,8 +77,9 @@ npm run build
 
 Architecture is layered: `parsers/` turns exported files into a unified `Film`
 model, `domain/` holds every rule worth testing as pure TypeScript, `services/`
-owns the only network and storage access, and `ui/` renders. `domain/` and
-`parsers/` import nothing from the outer layers, which is enforced by ESLint.
+owns the only network and storage access, `enrich/` composes those services into
+the progressive TMDB fill-in, and `ui/` renders. `domain/` and `parsers/` import
+nothing from the outer layers, which is enforced by ESLint.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
