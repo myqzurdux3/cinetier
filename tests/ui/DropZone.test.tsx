@@ -70,14 +70,15 @@ describe('DropZone', () => {
 
   it('announces the import in progress to screen readers, and falls silent once idle', async () => {
     render(<DropZone onImported={vi.fn()} />);
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    const status = screen.getByRole('status');
+    expect(status.textContent).toBe('');
 
     const input = screen.getByLabelText(/choose a file/i);
     fireEvent.change(input, {
       target: { files: [new File([imdbCsv], 'ratings.csv', { type: 'text/csv' })] },
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent(/reading your export/i);
-    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    expect(status).toHaveTextContent(/reading your export/i);
+    await waitFor(() => expect(status.textContent).toBe(''));
   });
 });

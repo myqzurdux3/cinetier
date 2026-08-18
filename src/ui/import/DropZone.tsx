@@ -64,11 +64,9 @@ export function DropZone({ onImported }: DropZoneProps) {
           An IMDb <code>ratings.csv</code>, or a Letterboxd <code>.zip</code> exactly as you
           downloaded it.
         </p>
-        {busy && (
-          <p role="status" aria-live="polite" className="sr-only">
-            Reading your export…
-          </p>
-        )}
+        <p role="status" aria-live="polite" className="sr-only">
+          {busy ? 'Reading your export…' : ''}
+        </p>
 
         <label
           htmlFor={inputId}
