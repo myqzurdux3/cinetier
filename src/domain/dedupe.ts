@@ -52,33 +52,50 @@ export function mergeLibraries(...libraries: Film[][]): Film[] {
 
   for (const library of libraries) {
     for (const film of library) {
-      const candidateKeys = getCandidateKeys(film);
+      // Determine which keys to use for MATCHING existing films.
+      // If the incoming film has an IMDb ID, match ONLY by that ID to avoid
+      // false positives from title collisions. Otherwise, match by title+year.
+      const matchKeys: string[] = [];
+      if (film.imdbId) {
+        matchKeys.push(`imdb:${film.imdbId}`);
+      } else {
+        matchKeys.push(`title:${normalizeTitle(film.title)}::${film.year ?? 'unknown'}`);
+      }
 
-      // Look for an existing film under any of the candidate keys
-      let existing: Film | undefined;
-      let existingKey: string | undefined;
-      for (const key of candidateKeys) {
-        const found = byKey.get(key);
-        if (found) {
-          existing = found;
-          existingKey = key;
-          break;
+      // Collect all existing films reachable by match keys
+      const existingFilms = new Set<Film>();
+      for (const key of matchKeys) {
+        const existing = byKey.get(key);
+        if (existing) {
+          existingFilms.add(existing);
         }
       }
 
-      const merged = existing ? mergeFilm(existing, film) : film;
-
-      // If we found an existing film, remove it from all keys it was registered under
-      if (existing && existingKey) {
+      // Collect all keys for all existing films
+      const keysToDelete = new Set<string>();
+      if (existingFilms.size > 0) {
         for (const [key, value] of byKey.entries()) {
-          if (value === existing) {
-            byKey.delete(key);
+          if (existingFilms.has(value)) {
+            keysToDelete.add(key);
           }
         }
       }
 
-      // Register the merged film under all applicable keys
-      for (const key of candidateKeys) {
+      // Merge all collected films with the incoming film
+      let merged = film;
+      for (const existing of existingFilms) {
+        merged = mergeFilm(existing, merged);
+      }
+
+      // Delete old keys
+      for (const key of keysToDelete) {
+        byKey.delete(key);
+      }
+
+      // Re-register under all candidate keys from the merged result
+      // (so future films can find this record via either ID or title)
+      const mergedKeys = getCandidateKeys(merged);
+      for (const key of mergedKeys) {
         byKey.set(key, merged);
       }
     }

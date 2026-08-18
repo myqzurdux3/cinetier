@@ -99,4 +99,50 @@ describe('mergeLibraries', () => {
     );
     expect(merged).toHaveLength(2);
   });
+
+  it('finds merged films by identifier regardless of merge order', () => {
+    const imdb = [film({ title: 'The Matrix', year: 1999, imdbId: 'tt0133093', rating: 90 })];
+    const letterboxd = [
+      film({
+        title: 'The Matrix',
+        year: 1999,
+        source: 'letterboxd',
+        imdbId: null,
+        rating: 80,
+      }),
+    ];
+    const differentSpelling = [
+      film({ title: 'Matrix, The', year: 1999, imdbId: 'tt0133093', rating: 70 }),
+    ];
+
+    // Both orders should produce the same result
+    const result1 = mergeLibraries(imdb, letterboxd, differentSpelling);
+    const result2 = mergeLibraries(letterboxd, imdb, differentSpelling);
+
+    expect(result1).toHaveLength(1);
+    expect(result2).toHaveLength(1);
+    expect(result1[0]?.imdbId).toBe('tt0133093');
+    expect(result2[0]?.imdbId).toBe('tt0133093');
+  });
+
+  it('does not silently destroy unrelated films when merging by identifier', () => {
+    const first = [film({ title: 'Foo', year: 2000, imdbId: 'ttFoo' })];
+    const unrelated = [
+      film({
+        title: 'Bar',
+        year: 2000,
+        source: 'letterboxd',
+        imdbId: null,
+        rating: 50,
+      }),
+    ];
+    const mergeWithFirst = [film({ title: 'Bar', year: 2000, imdbId: 'ttFoo', rating: 60 })];
+
+    const result = mergeLibraries(first, unrelated, mergeWithFirst);
+
+    expect(result).toHaveLength(2);
+    const titles = result.map((f) => f.title).sort();
+    expect(titles).toContain('Foo');
+    expect(titles).toContain('Bar');
+  });
 });
