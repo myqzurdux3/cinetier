@@ -1,6 +1,6 @@
 import type { Film } from '@/domain/film';
 import { mergeLibraries } from '@/domain/dedupe';
-import { normalizeTitle } from '@/domain/normalize';
+import { titleYearKey } from '@/domain/normalize';
 import { lookupByImdbId, searchByTitle, type TmdbMatch } from '@/services/tmdb';
 import { getCached, putCached } from '@/services/tmdbCache';
 
@@ -33,7 +33,7 @@ const DEFAULT_CONCURRENCY = 6;
  */
 function cacheKey(film: Film): string {
   if (film.imdbId) return `imdb:${film.imdbId}`;
-  return `title:${normalizeTitle(film.title)}::${film.year ?? 'unknown'}`;
+  return titleYearKey(film);
 }
 
 async function resolve(film: Film): Promise<TmdbMatch | null> {

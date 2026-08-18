@@ -1,5 +1,5 @@
 import type { Film, FilmSource } from './film';
-import { normalizeTitle } from './normalize';
+import { titleYearKey } from './normalize';
 
 /**
  * Combine one record of the same film from two services.
@@ -45,11 +45,6 @@ function identifierKeys(film: Pick<Film, 'imdbId' | 'tmdbId'>): string[] {
   if (film.imdbId !== null) keys.push(`imdb:${film.imdbId}`);
   if (film.tmdbId !== null) keys.push(`tmdb:${film.tmdbId}`);
   return keys;
-}
-
-/** The fallback key, used whenever either side of a comparison lacks an identifier. */
-function titleKey(film: Pick<Film, 'title' | 'year'>): string {
-  return `title:${normalizeTitle(film.title)}::${film.year ?? 'unknown'}`;
 }
 
 /**
@@ -143,7 +138,10 @@ export function mergeLibraries(...libraries: Film[][]): Film[] {
       else union(first, index);
     }
 
-    const title = titleKey(film);
+    // The fallback key, used whenever either side of a comparison lacks an
+    // identifier. Shared with the enrichment cache, which keys the same films
+    // the same way.
+    const title = titleYearKey(film);
     const group = groupsByTitle.get(title);
     if (group === undefined) groupsByTitle.set(title, [index]);
     else group.push(index);
