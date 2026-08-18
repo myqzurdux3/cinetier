@@ -1,12 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
 import { importFiles } from '@/ui/import/importFiles';
 
 const imdbCsv = readFileSync('tests/fixtures/imdb-ratings.csv', 'utf8');
 const diaryCsv = readFileSync('tests/fixtures/letterboxd-diary.csv', 'utf8');
+const ratingsCsv = readFileSync('tests/fixtures/letterboxd-ratings.csv', 'utf8');
 
 function file(name: string, content: string): File {
   return new File([content], name, { type: 'text/csv' });
+}
+
+/** A real Letterboxd-shaped archive, entries under a dated folder as they ship. */
+async function archive(name: string, entries: Record<string, string>): Promise<File> {
+  const writer = new ZipWriter(new BlobWriter('application/zip'));
+  for (const [entry, content] of Object.entries(entries)) {
+    await writer.add(`letterboxd-user-2026-08-18/${entry}`, new TextReader(content));
+  }
+  return new File([await writer.close()], name, { type: 'application/zip' });
 }
 
 describe('importFiles', () => {
@@ -76,6 +87,49 @@ describe('importFiles', () => {
     if (outcome.status !== 'error') return;
     expect(outcome.message).toMatch(/holiday-photos\.csv/);
     expect(outcome.hint).toMatch(/IMDb|Letterboxd/);
+  });
+
+  it('unpacks a Letterboxd export .zip and reads the files inside it', async () => {
+    const zip = await archive('letterboxd-user.zip', {
+      'diary.csv': diaryCsv,
+      'ratings.csv': ratingsCsv,
+    });
+
+    const outcome = await importFiles([zip]);
+
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') return;
+    expect(outcome.films).toHaveLength(6);
+    expect(outcome.films.every((f) => f.source === 'letterboxd')).toBe(true);
+
+    // Both files inside the archive have to reach the parser, so look for the
+    // film only the diary holds and the film only the ratings file holds.
+    const titles = outcome.films.map((f) => f.title);
+    expect(titles).toContain('Parasite');
+    expect(titles).toContain('Stalker');
+  });
+
+  it('merges an archive with a loose IMDb export dropped alongside it', async () => {
+    const zip = await archive('letterboxd-user.zip', { 'diary.csv': diaryCsv });
+
+    const outcome = await importFiles([file('ratings.csv', imdbCsv), zip]);
+
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') return;
+    // Same 5 + 5 with three overlaps as the loose-files case, so the archive's
+    // contents are going through the very same merge.
+    expect(outcome.films).toHaveLength(7);
+  });
+
+  it('reports an archive that holds none of the files it wants', async () => {
+    const zip = await archive('letterboxd-user.zip', { 'profile.csv': 'nothing useful' });
+
+    const outcome = await importFiles([zip]);
+
+    expect(outcome.status).toBe('error');
+    if (outcome.status !== 'error') return;
+    expect(outcome.message).toMatch(/diary\.csv/);
+    expect(outcome.hint).toMatch(/Import & Export/);
   });
 
   it('reports an empty selection', async () => {

@@ -6,7 +6,58 @@ import { DropZone } from '@/ui/import/DropZone';
 
 const imdbCsv = readFileSync('tests/fixtures/imdb-ratings.csv', 'utf8');
 
+/**
+ * The dashed panel itself, which is what carries the drag-and-drop handlers.
+ * It has no role of its own to query by, and its visible text changes while an
+ * import is in flight, so it is found by the aria-busy it always exposes.
+ */
+function zone(): HTMLElement {
+  const panel = document.querySelector<HTMLElement>('[aria-busy]');
+  if (panel === null) throw new Error('the drop panel is not in the document');
+  return panel;
+}
+
 describe('DropZone', () => {
+  it('imports a file dropped onto the panel, not only one chosen through the picker', async () => {
+    const onImported = vi.fn();
+    render(<DropZone onImported={onImported} />);
+
+    // jsdom builds no DataTransfer for a synthetic drag event, so the files
+    // come in as a stub — the only part of it the component reads.
+    fireEvent.drop(zone(), {
+      dataTransfer: { files: [new File([imdbCsv], 'ratings.csv', { type: 'text/csv' })] },
+    });
+
+    await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
+    expect(onImported.mock.calls[0]![0]).toMatchObject({ status: 'ok' });
+  });
+
+  it('highlights while a file is over it and stops when the file leaves again', () => {
+    render(<DropZone onImported={vi.fn()} />);
+
+    expect(zone().className).not.toContain('border-accent');
+
+    fireEvent.dragOver(zone());
+    expect(zone().className).toContain('border-accent');
+
+    fireEvent.dragLeave(zone());
+    expect(zone().className).not.toContain('border-accent');
+  });
+
+  it('drops the highlight once the file has been dropped', async () => {
+    render(<DropZone onImported={vi.fn()} />);
+
+    fireEvent.dragOver(zone());
+    expect(zone().className).toContain('border-accent');
+
+    fireEvent.drop(zone(), {
+      dataTransfer: { files: [new File([imdbCsv], 'ratings.csv', { type: 'text/csv' })] },
+    });
+
+    expect(zone().className).not.toContain('border-accent');
+    await waitFor(() => expect(zone()).toHaveAttribute('aria-busy', 'false'));
+  });
+
   it('imports a file chosen through the file picker', async () => {
     const onImported = vi.fn();
     render(<DropZone onImported={onImported} />);
