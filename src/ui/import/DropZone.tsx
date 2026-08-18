@@ -1,4 +1,4 @@
-import { useId, useState, type DragEvent, type ChangeEvent } from 'react';
+import { useId, useRef, useState, type DragEvent, type ChangeEvent } from 'react';
 import { importFiles, type ImportOutcome } from './importFiles';
 
 interface DropZoneProps {
@@ -10,17 +10,28 @@ export function DropZone({ onImported }: DropZoneProps) {
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ message: string; hint: string } | null>(null);
+  // `busy` state is not readable synchronously within the same handler tick,
+  // so a second drop or selection arriving before the first re-render could
+  // slip past a state-only check. The ref is read-then-set immediately, so
+  // it reliably blocks a second import while one is already in flight.
+  const busyRef = useRef(false);
 
   async function handle(files: File[]) {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
-    const outcome = await importFiles(files);
-    setBusy(false);
-    if (outcome.status === 'error') {
-      setError({ message: outcome.message, hint: outcome.hint });
-      return;
+    try {
+      const outcome = await importFiles(files);
+      if (outcome.status === 'error') {
+        setError({ message: outcome.message, hint: outcome.hint });
+        return;
+      }
+      onImported(outcome);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
-    onImported(outcome);
   }
 
   function onDrop(event: DragEvent<HTMLDivElement>) {
@@ -65,6 +76,7 @@ export function DropZone({ onImported }: DropZoneProps) {
           multiple
           accept=".csv,.zip"
           onChange={onChange}
+          disabled={busy}
           className="sr-only"
         />
       </div>

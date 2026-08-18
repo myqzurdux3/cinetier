@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { DropZone } from '@/ui/import/DropZone';
@@ -33,5 +33,38 @@ describe('DropZone', () => {
     const input = screen.getByLabelText(/choose a file/i);
     expect(input).toBeInTheDocument();
     expect(input.tagName).toBe('INPUT');
+  });
+
+  it('ignores a second selection that arrives while the first is still being read', async () => {
+    const onImported = vi.fn();
+    render(<DropZone onImported={onImported} />);
+
+    const input = screen.getByLabelText(/choose a file/i);
+    const first = new File([imdbCsv], 'ratings.csv', { type: 'text/csv' });
+    const second = new File([imdbCsv], 'ratings (1).csv', { type: 'text/csv' });
+
+    // Fired back to back, synchronously, so the second selection lands while
+    // the first import is still in flight (its `await file.text()` has not
+    // yet resolved). Without a guard, both would reach onImported.
+    fireEvent.change(input, { target: { files: [first] } });
+    fireEvent.change(input, { target: { files: [second] } });
+
+    await waitFor(() => expect(onImported).toHaveBeenCalled());
+    // Give any wrongly-admitted second import a chance to also resolve.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onImported).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the file input while an import is in flight', async () => {
+    render(<DropZone onImported={vi.fn()} />);
+    const input: HTMLInputElement = screen.getByLabelText(/choose a file/i);
+    expect(input.disabled).toBe(false);
+
+    fireEvent.change(input, {
+      target: { files: [new File([imdbCsv], 'ratings.csv', { type: 'text/csv' })] },
+    });
+
+    expect(input.disabled).toBe(true);
+    await waitFor(() => expect(input.disabled).toBe(false));
   });
 });
