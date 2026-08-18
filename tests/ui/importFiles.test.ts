@@ -46,6 +46,30 @@ describe('importFiles', () => {
     expect(duneYears).toEqual([1984, 2021]);
   });
 
+  it('recognises an IMDb header with no trailing newline (single-line file)', async () => {
+    // The detection token "Your Rating" is placed last, so the header-slicing
+    // bug (which drops the file's final character when there is no newline)
+    // would break detection here even though it happens to survive on the
+    // real IMDb fixture, where "Your Rating" is not the final column.
+    const headerOnly = 'Title,Title Type,Year,Const,Your Rating';
+    const outcome = await importFiles([file('ratings.csv', headerOnly)]);
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') return;
+    expect(outcome.films).toHaveLength(0);
+  });
+
+  it("surfaces a ParseError's own message and hint, not the generic fallback", async () => {
+    // Passes looksLikeImdb (has Const and Your Rating) but is missing the other
+    // required columns, so parseImdbRatings throws from inside importFiles' try.
+    const outcome = await importFiles([file('ratings.csv', 'Const,Your Rating\ntt0133093,9\n')]);
+    expect(outcome.status).toBe('error');
+    if (outcome.status !== 'error') return;
+    expect(outcome.message).toBe('This file is missing the column(s): Title, Title Type, Year.');
+    expect(outcome.hint).toBe(
+      'Export "Your Ratings" from IMDb and upload the ratings.csv file it produces.',
+    );
+  });
+
   it('reports an unrecognisable file with a hint rather than a stack trace', async () => {
     const outcome = await importFiles([file('holiday-photos.csv', 'a,b,c\n1,2,3')]);
     expect(outcome.status).toBe('error');

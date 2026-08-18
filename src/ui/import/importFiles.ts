@@ -47,7 +47,8 @@ export async function importFiles(files: File[]): Promise<ImportOutcome> {
       }
 
       const text = await file.text();
-      const header = text.slice(0, text.indexOf('\n'));
+      const newline = text.indexOf('\n');
+      const header = newline === -1 ? text : text.slice(0, newline);
 
       if (looksLikeImdb(header)) {
         const result = parseImdbRatings(text);
