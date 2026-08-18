@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Shell } from './Shell';
 import { SourcePicker, type ImportSource } from './import/SourcePicker';
 import { ImportGuide } from './import/ImportGuide';
 import { FilmGrid } from './library/FilmGrid';
 import { LibrarySummary } from './library/LibrarySummary';
 import { enrichLibrary } from '@/enrich/enrichLibrary';
+import { saveLibrary, loadLibrary, clearLibrary } from '@/services/library';
 import type { ImportOutcome } from './import/importFiles';
 import type { Film } from '@/domain/film';
 
@@ -13,6 +14,17 @@ export default function App() {
   const [films, setFilms] = useState<Film[] | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [enriching, setEnriching] = useState<{ done: number; total: number } | null>(null);
+
+  // Restore whatever was saved last time. Guarded with the functional setFilms
+  // form so a library restored after this promise settles can never clobber a
+  // fresh import the user has already started in the meantime: by the time
+  // onImported has called setFilms with real data, `current` here is no
+  // longer null, so the restore becomes a no-op instead of a takeover.
+  useEffect(() => {
+    void loadLibrary().then((restored) => {
+      if (restored) setFilms((current) => current ?? restored);
+    });
+  }, []);
 
   const onImported = useCallback(async (outcome: ImportOutcome) => {
     if (outcome.status !== 'ok') return;
@@ -27,9 +39,11 @@ export default function App() {
 
     setFilms(enriched);
     setEnriching(null);
+    await saveLibrary(enriched);
   }, []);
 
   function reset() {
+    void clearLibrary();
     setFilms(null);
     setWarnings([]);
     setEnriching(null);
