@@ -114,6 +114,38 @@ describe('mergeLibraries', () => {
     expect(merged).toHaveLength(2);
   });
 
+  it('merges two records that share a TMDB identifier even with no IMDb id', () => {
+    // Enrichment via title search never fills imdbId (TMDB's search endpoint
+    // does not return one), so tmdbId has to be able to carry a match on its own.
+    const a = [film({ title: 'The Matrix', imdbId: null, tmdbId: 603 })];
+    const b = [film({ title: 'Matrix, The', imdbId: null, tmdbId: 603, source: 'letterboxd' })];
+    expect(mergeLibraries(a, b)).toHaveLength(1);
+  });
+
+  it('merges a record with both identifiers into one that only shares the TMDB id', () => {
+    // Titles deliberately do not match, so only the shared tmdbId can be doing the work.
+    const a = [film({ title: 'The Matrix', imdbId: 'tt0133093', tmdbId: 603 })];
+    const b = [
+      film({ title: 'Something Else Entirely', imdbId: null, tmdbId: 603, source: 'letterboxd' }),
+    ];
+    expect(mergeLibraries(a, b)).toHaveLength(1);
+  });
+
+  it('still merges by title and year when TMDB identifiers differ', () => {
+    // Adding tmdbId as an identifier must not make title+year matching stricter:
+    // a mismatched tmdbId (a bad search match, say) cannot override an otherwise
+    // exact title-and-year agreement between two records with no IMDb id.
+    const a = [film({ title: 'Foo', year: 2000, imdbId: null, tmdbId: 1 })];
+    const b = [film({ title: 'Foo', year: 2000, imdbId: null, tmdbId: 2, source: 'letterboxd' })];
+    expect(mergeLibraries(a, b)).toHaveLength(1);
+  });
+
+  it('keeps two records with different TMDB identifiers and different years apart', () => {
+    const a = [film({ title: 'Foo', year: 2000, imdbId: null, tmdbId: 1 })];
+    const b = [film({ title: 'Foo', year: 2010, imdbId: null, tmdbId: 2, source: 'letterboxd' })];
+    expect(mergeLibraries(a, b)).toHaveLength(2);
+  });
+
   it('merges all permutations correctly when keys eventually collide', () => {
     // Three films that should merge in any order:
     // A: "The Matrix" with ID tt0133093 (IMDb style)

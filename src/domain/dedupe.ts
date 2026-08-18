@@ -31,9 +31,20 @@ function mergeFilm(base: Film, incoming: Film): Film {
   };
 }
 
-/** The identifier two records must share to be the same film, or null when there is none. */
-function identifierKey(film: Pick<Film, 'imdbId'>): string | null {
-  return film.imdbId === null ? null : `imdb:${film.imdbId}`;
+/**
+ * Every identifier a record carries that two records can share to be the same film.
+ * A film can contribute both: an IMDb import has imdbId from the start, and enrichment
+ * can add tmdbId alongside it. A Letterboxd record enriched by title search gains only
+ * tmdbId — TMDB's search endpoint never returns an IMDb id, only `find`-by-imdbId does,
+ * and that requires already having one. So tmdbId is the only identifier a title-searched
+ * record can ever carry, and without treating it as one, enrichment could resolve the
+ * exact same TMDB film for two records and mergeLibraries would still never see it.
+ */
+function identifierKeys(film: Pick<Film, 'imdbId' | 'tmdbId'>): string[] {
+  const keys: string[] = [];
+  if (film.imdbId !== null) keys.push(`imdb:${film.imdbId}`);
+  if (film.tmdbId !== null) keys.push(`tmdb:${film.tmdbId}`);
+  return keys;
 }
 
 /** The fallback key, used whenever either side of a comparison lacks an identifier. */
@@ -87,13 +98,14 @@ function sortByFoldOrder(films: readonly Film[]): Film[] {
 /**
  * Combine any number of imported libraries into one, without duplicate films.
  *
- * Two records describe the same film when they share an IMDb identifier, or, when
- * either of them lacks one, when their normalized title and year match. That relation
- * is transitive: a Letterboxd record matched by title to an IMDb record is also the same
- * film as every other record carrying that IMDb identifier, whatever title it happens to
- * display. So the records are treated as a graph, matches as edges, and each connected
- * component as one film. A key that ever linked a record into a component keeps doing so,
- * which a map from the merged record's own current fields cannot express.
+ * Two records describe the same film when they share an IMDb identifier or a TMDB
+ * identifier, or, when neither of them has an identifier the other one also has, when
+ * their normalized title and year match. That relation is transitive: a Letterboxd
+ * record matched by title to an IMDb record is also the same film as every other record
+ * carrying that record's IMDb or TMDB identifier, whatever title it happens to display.
+ * So the records are treated as a graph, matches as edges, and each connected component
+ * as one film. A key that ever linked a record into a component keeps doing so, which a
+ * map from the merged record's own current fields cannot express.
  *
  * The result is a function of which records were passed, not of the order the libraries
  * or the rows inside them arrived in.
@@ -125,8 +137,7 @@ export function mergeLibraries(...libraries: Film[][]): Film[] {
   const groupsByTitle = new Map<string, number[]>();
 
   for (const [index, film] of films.entries()) {
-    const identifier = identifierKey(film);
-    if (identifier !== null) {
+    for (const identifier of identifierKeys(film)) {
       const first = firstByIdentifier.get(identifier);
       if (first === undefined) firstByIdentifier.set(identifier, index);
       else union(first, index);
@@ -139,9 +150,17 @@ export function mergeLibraries(...libraries: Film[][]): Film[] {
   }
 
   for (const group of groupsByTitle.values()) {
-    // Title and year only settle the question when one side has no identifier. Two
-    // records that each carry a different identifier are different films (a remake
+    // Title and year only settle the question when one side has no *IMDb* identifier.
+    // Two records that each carry a different IMDb id are different films (a remake
     // released the same year as the original, say), however alike their titles read.
+    //
+    // This deliberately checks imdbId alone, not identifierKeys' broader notion of
+    // identifier. IMDb ids come from the user's own export or from an exact `find`-
+    // by-id lookup, so a mismatch is trustworthy evidence of two different films. A
+    // TMDB id can also arrive via a fuzzy title search, so a differing tmdbId is not
+    // trusted to override an otherwise exact title-and-year match; requiring "no
+    // identifier at all" here would make matching stricter than before tmdbId was
+    // added, which is exactly the regression the tests below guard against.
     const anchor = group.find((index) => films[index]!.imdbId === null);
     if (anchor === undefined) continue;
     for (const index of group) union(anchor, index);
