@@ -53,6 +53,7 @@ export function DropZone({ onImported }: DropZoneProps) {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
+        aria-busy={busy}
         className={[
           'rounded-lg border-2 border-dashed p-10 text-center transition-colors',
           dragging ? 'border-accent bg-surface' : 'border-line',
@@ -63,6 +64,11 @@ export function DropZone({ onImported }: DropZoneProps) {
           An IMDb <code>ratings.csv</code>, or a Letterboxd <code>.zip</code> exactly as you
           downloaded it.
         </p>
+        {busy && (
+          <p role="status" aria-live="polite" className="sr-only">
+            Reading your export…
+          </p>
+        )}
 
         <label
           htmlFor={inputId}

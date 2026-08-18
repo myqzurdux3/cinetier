@@ -67,4 +67,17 @@ describe('DropZone', () => {
     expect(input.disabled).toBe(true);
     await waitFor(() => expect(input.disabled).toBe(false));
   });
+
+  it('announces the import in progress to screen readers, and falls silent once idle', async () => {
+    render(<DropZone onImported={vi.fn()} />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    const input = screen.getByLabelText(/choose a file/i);
+    fireEvent.change(input, {
+      target: { files: [new File([imdbCsv], 'ratings.csv', { type: 'text/csv' })] },
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent(/reading your export/i);
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
 });
