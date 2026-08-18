@@ -1,4 +1,4 @@
-import { BlobReader, TextWriter, ZipReader, configure } from '@zip.js/zip.js';
+import { TextWriter, Uint8ArrayReader, ZipReader, configure } from '@zip.js/zip.js';
 import { ParseError } from './types';
 import type { LetterboxdFiles } from './letterboxd';
 
@@ -14,9 +14,15 @@ const HINT =
 /**
  * Pull the three CSV files Cinetier reads out of a Letterboxd export archive.
  * Entries live under a dated folder, so matching is done on the base name.
+ *
+ * The archive is read through its bytes rather than through a BlobReader: a
+ * Letterboxd export is a handful of small CSV files, so holding it in memory
+ * costs nothing, and it keeps the read off Blob.prototype.stream(), which not
+ * every environment the tests run in provides.
  */
 export async function readLetterboxdArchive(archive: Blob): Promise<LetterboxdFiles> {
-  const reader = new ZipReader(new BlobReader(archive));
+  const bytes = new Uint8Array(await archive.arrayBuffer());
+  const reader = new ZipReader(new Uint8ArrayReader(bytes));
   const files: LetterboxdFiles = {};
 
   try {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
+import { Uint8ArrayReader, Uint8ArrayWriter, ZipWriter } from '@zip.js/zip.js';
 import { importFiles } from '@/ui/import/importFiles';
 
 const imdbCsv = readFileSync('tests/fixtures/imdb-ratings.csv', 'utf8');
@@ -11,11 +11,23 @@ function file(name: string, content: string): File {
   return new File([content], name, { type: 'text/csv' });
 }
 
-/** A real Letterboxd-shaped archive, entries under a dated folder as they ship. */
+/**
+ * A real Letterboxd-shaped archive, entries under a dated folder as they ship.
+ *
+ * Built from bytes rather than with BlobWriter/TextReader: zip.js assembles a
+ * BlobWriter's output with `new Response(stream).blob()`, and under jsdom the
+ * Blob that comes back is not always jsdom's own. jsdom's Blob constructor
+ * does not recognise a foreign Blob as a part and stringifies it to
+ * "[object Blob]", so the archive would silently come out as 13 bytes of
+ * nonsense. Uint8Array in, Uint8Array out keeps the fixture honest.
+ */
 async function archive(name: string, entries: Record<string, string>): Promise<File> {
-  const writer = new ZipWriter(new BlobWriter('application/zip'));
+  const writer = new ZipWriter(new Uint8ArrayWriter());
   for (const [entry, content] of Object.entries(entries)) {
-    await writer.add(`letterboxd-user-2026-08-18/${entry}`, new TextReader(content));
+    await writer.add(
+      `letterboxd-user-2026-08-18/${entry}`,
+      new Uint8ArrayReader(new TextEncoder().encode(content)),
+    );
   }
   return new File([await writer.close()], name, { type: 'application/zip' });
 }
