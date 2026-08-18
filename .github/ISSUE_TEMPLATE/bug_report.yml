@@ -1,0 +1,35 @@
+name: Bug report
+description: Something behaved incorrectly
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Which import source?
+      options: [IMDb, Letterboxd, Both, Not related to importing]
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have removed any personal data from files and screenshots I attach.
+          required: true

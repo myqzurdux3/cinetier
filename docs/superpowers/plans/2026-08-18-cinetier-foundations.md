@@ -68,11 +68,13 @@ Files are split by responsibility, not by technical layer: `rating.ts` owns ever
 ### Task 1: Project scaffold, tooling, and continuous integration
 
 **Files:**
+
 - Create: `package.json`, `tsconfig.json`, `tsconfig.node.json`, `vite.config.ts`, `eslint.config.js`, `.prettierrc.json`, `index.html`, `src/main.tsx`, `src/App.tsx`, `src/index.css`, `src/vite-env.d.ts`, `.env.example`
 - Create: `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `.github/dependabot.yml`
 - Verify: `.gitignore` (already exists)
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `npm run dev`, `npm run build`, `npm run test`, `npm run test:run`, `npm run lint`, `npm run typecheck`. All later tasks rely on `npm run test:run` and the `@/` path alias resolving to `src/`.
 
@@ -202,8 +204,10 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            { group: ['@/ui/*', '@/services/*', 'react', 'react-dom'],
-              message: 'domain/ and parsers/ must stay free of UI and I/O dependencies.' },
+            {
+              group: ['@/ui/*', '@/services/*', 'react', 'react-dom'],
+              message: 'domain/ and parsers/ must stay free of UI and I/O dependencies.',
+            },
           ],
         },
       ],
@@ -240,7 +244,10 @@ export default tseslint.config(
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cinetier — Turn your film history into a tier list</title>
-    <meta name="description" content="Import your IMDb or Letterboxd history and rank it. Runs entirely in your browser." />
+    <meta
+      name="description"
+      content="Import your IMDb or Letterboxd history and rank it. Runs entirely in your browser."
+    />
   </head>
   <body>
     <div id="root"></div>
@@ -407,14 +414,14 @@ jobs:
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
     groups:
       dev-dependencies:
         dependency-type: development
   - package-ecosystem: github-actions
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
 ```
@@ -435,16 +442,18 @@ The `git status --short` after staging is not ceremony. It is the last moment to
 
 ### Task 2: Repository documentation, commit hygiene, and going public
 
-The repository becomes publicly visible in this task. Everything a visitor judges the project by — the README, the licence, the contribution guide — must exist *before* that happens, not after.
+The repository becomes publicly visible in this task. Everything a visitor judges the project by — the README, the licence, the contribution guide — must exist _before_ that happens, not after.
 
 **Files:**
+
 - Create: `LICENSE`, `README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CHANGELOG.md`
 - Create: `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/ISSUE_TEMPLATE/feature_request.yml`, `.github/pull_request_template.md`
 - Create: `commitlint.config.js`, `.lintstagedrc.json`, `.husky/commit-msg`, `.husky/pre-commit`
 
 **Interfaces:**
+
 - Consumes: the working `npm run lint`, `npm run typecheck`, and `npm run build` scripts from Task 1.
-- Produces: a public repository at `github.com/<owner>/cinetier` with `origin` configured, the `TMDB_API_KEY` secret registered, and GitHub Pages serving from Actions. Every later task pushes to this remote.
+- Produces: a public repository at `github.com/myqzurdux3/cinetier` with `origin` configured, the `TMDB_API_KEY` secret registered, and GitHub Pages serving from Actions. Every later task pushes to this remote.
 
 - [ ] **Step 1: Install commit tooling**
 
@@ -463,11 +472,7 @@ npx husky init
 export default {
   extends: ['@commitlint/config-conventional'],
   rules: {
-    'scope-enum': [
-      2,
-      'always',
-      ['domain', 'parsers', 'services', 'ui', 'deps', 'ci', 'docs'],
-    ],
+    'scope-enum': [2, 'always', ['domain', 'parsers', 'services', 'ui', 'deps', 'ci', 'docs']],
   },
 };
 ```
@@ -511,7 +516,7 @@ npx lint-staged
 Import your IMDb or Letterboxd data, filter it however you like, and rank it.
 Everything runs in your browser — no account, no upload, no server.
 
-[Open Cinetier](https://<owner>.github.io/cinetier/)
+[Open Cinetier](https://myqzurdux3.github.io/cinetier/)
 
 </div>
 
@@ -554,7 +559,7 @@ watch dates.
 ## Running it locally
 
 ```bash
-git clone https://github.com/<owner>/cinetier.git
+git clone https://github.com/myqzurdux3/cinetier.git
 cd cinetier
 npm install
 cp .env.example .env.local   # then add a free TMDB API key
@@ -593,13 +598,13 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 Cinetier is not affiliated with, endorsed by, or connected to IMDb or Letterboxd.
 ````
 
-Replace `<owner>` with the actual GitHub account name in all four places.
+Replace `myqzurdux3` with the actual GitHub account name in all four places.
 
 - [ ] **Step 5: Write the contribution and conduct documents**
 
 `CONTRIBUTING.md`:
 
-```markdown
+````markdown
 # Contributing to Cinetier
 
 Thanks for your interest. Bug reports, fixture files from real exports, and
@@ -612,6 +617,7 @@ npm install
 cp .env.example .env.local   # add a free TMDB key
 npm run dev
 ```
+````
 
 ## Ground rules
 
@@ -635,7 +641,8 @@ Add a parser under `src/parsers/` that returns `ParseResult`, with a fixture
 file under `tests/fixtures/` and tests covering a normal file, a file missing a
 required column, and a malformed row. Nothing outside `src/parsers/` should need
 to change.
-```
+
+````
 
 `CODE_OF_CONDUCT.md`: use the Contributor Covenant version 2.1, copied verbatim from https://www.contributor-covenant.org/version/2/1/code_of_conduct/, with the contact address filled in.
 
@@ -658,7 +665,7 @@ order to fetch posters.
 The TMDB API key present in the built JavaScript is intentional, not a leak: a
 client-side application has no server in which to hide it. It is a read-only,
 rate-limited key. Reports about its visibility will be closed as by design.
-```
+````
 
 - [ ] **Step 6: Add issue and pull request templates**
 
@@ -815,17 +822,19 @@ gh repo edit --homepage "https://$(gh api user --jq .login).github.io/cinetier/"
 gh run watch
 ```
 
-Expected: CI green, deploy green, and `https://<owner>.github.io/cinetier/` showing the word "Cinetier". Confirm in a browser before continuing — a deployment pipeline proven now costs minutes, while one discovered broken at task 20 costs hours of bisecting.
+Expected: CI green, deploy green, and `https://myqzurdux3.github.io/cinetier/` showing the word "Cinetier". Confirm in a browser before continuing — a deployment pipeline proven now costs minutes, while one discovered broken at task 20 costs hours of bisecting.
 
 ---
 
 ### Task 3: Rating scale conversion
 
 **Files:**
+
 - Create: `src/domain/rating.ts`
 - Test: `tests/domain/rating.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces:
   - `type RatingScale = 'imdb10' | 'letterboxd5'`
@@ -963,10 +972,12 @@ git commit -m "feat(domain): add rating scale normalization and formatting"
 ### Task 4: The Film type and title normalization
 
 **Files:**
+
 - Create: `src/domain/film.ts`, `src/domain/normalize.ts`
 - Test: `tests/domain/normalize.test.ts`
 
 **Interfaces:**
+
 - Consumes: `RatingScale` from Task 3.
 - Produces:
   - `interface Film` — the unified record every parser emits
@@ -1002,11 +1013,15 @@ describe('normalizeTitle', () => {
 
 describe('matchKey', () => {
   it('prefers the IMDb identifier when present', () => {
-    expect(matchKey({ imdbId: 'tt0133093', title: 'The Matrix', year: 1999 })).toBe('imdb:tt0133093');
+    expect(matchKey({ imdbId: 'tt0133093', title: 'The Matrix', year: 1999 })).toBe(
+      'imdb:tt0133093',
+    );
   });
 
   it('falls back to normalized title and year', () => {
-    expect(matchKey({ imdbId: null, title: 'The Matrix', year: 1999 })).toBe('title:the matrix::1999');
+    expect(matchKey({ imdbId: null, title: 'The Matrix', year: 1999 })).toBe(
+      'title:the matrix::1999',
+    );
   });
 
   it('distinguishes remakes released in different years', () => {
@@ -1112,11 +1127,13 @@ git commit -m "feat(domain): add unified Film model and title matching keys"
 ### Task 5: IMDb parser
 
 **Files:**
+
 - Create: `src/parsers/types.ts`, `src/parsers/imdb.ts`
 - Create: `tests/fixtures/imdb-ratings.csv`
 - Test: `tests/parsers/imdb.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Film` (Task 4), `normalizeRating` (Task 3).
 - Produces:
   - `interface ParseResult { films: Film[]; skipped: number; warnings: string[] }`
@@ -1137,7 +1154,7 @@ tt0087182,6,2022-08-09,Dune,Dune,https://www.imdb.com/title/tt0087182/,Movie,6.3
 tt1160419,7,2025-02-14,Dune,Dune,https://www.imdb.com/title/tt1160419/,Movie,8.0,155,2021,"Action, Adventure, Drama",850000,2021-10-22,Denis Villeneuve
 ```
 
-The two *Dune* rows are there on purpose: they prove the parser and the deduplicator keep a remake distinct from its original.
+The two _Dune_ rows are there on purpose: they prove the parser and the deduplicator keep a remake distinct from its original.
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -1358,11 +1375,13 @@ git commit -m "feat(parsers): parse IMDb ratings exports into the Film model"
 ### Task 6: Letterboxd parser
 
 **Files:**
+
 - Create: `src/parsers/letterboxd.ts`
 - Create: `tests/fixtures/letterboxd-diary.csv`, `tests/fixtures/letterboxd-ratings.csv`, `tests/fixtures/letterboxd-watched.csv`
 - Test: `tests/parsers/letterboxd.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Film` (Task 4), `normalizeRating` (Task 3), `ParseResult`/`ParseError`/`requireColumns` (Task 5).
 - Produces: `parseLetterboxdExport(files: LetterboxdFiles): ParseResult` where
   `interface LetterboxdFiles { diary?: string; ratings?: string; watched?: string }`
@@ -1405,7 +1424,7 @@ Date,Name,Year,Letterboxd URI
 2022-02-02,Solaris,1972,https://boxd.it/9m0n
 ```
 
-Read together these describe seven distinct films. Four titles appear in all three files, *Parasite* appears only in the diary, *Stalker* was rated but never logged in the diary, and *Solaris* was watched without ever being rated.
+Read together these describe seven distinct films. Four titles appear in all three files, _Parasite_ appears only in the diary, _Stalker_ was rated but never logged in the diary, and _Solaris_ was watched without ever being rated.
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -1429,7 +1448,13 @@ describe('parseLetterboxdExport', () => {
     expect(result.films).toHaveLength(7);
     const titles = result.films.map((f) => f.title).sort();
     expect(titles).toEqual([
-      'Amélie', 'Dune', 'Parasite', 'Pulp Fiction', 'Solaris', 'Stalker', 'The Matrix',
+      'Amélie',
+      'Dune',
+      'Parasite',
+      'Pulp Fiction',
+      'Solaris',
+      'Stalker',
+      'The Matrix',
     ]);
   });
 
@@ -1474,7 +1499,9 @@ describe('parseLetterboxdExport', () => {
   });
 
   it('rejects a file whose columns do not match a Letterboxd export', () => {
-    expect(() => parseLetterboxdExport({ ratings: 'Const,Your Rating\ntt01,9' })).toThrow(ParseError);
+    expect(() => parseLetterboxdExport({ ratings: 'Const,Your Rating\ntt01,9' })).toThrow(
+      ParseError,
+    );
   });
 });
 ```
@@ -1559,10 +1586,7 @@ function blankFilm(slug: string, row: Record<string, string>): Film {
  */
 export function parseLetterboxdExport(files: LetterboxdFiles): ParseResult {
   if (!files.diary && !files.ratings && !files.watched) {
-    throw new ParseError(
-      'No Letterboxd data file was found in this export.',
-      HINT,
-    );
+    throw new ParseError('No Letterboxd data file was found in this export.', HINT);
   }
 
   const bySlug = new Map<string, Film>();
@@ -1637,10 +1661,12 @@ git commit -m "feat(parsers): merge Letterboxd diary, ratings, and watched expor
 ### Task 7: Library deduplication
 
 **Files:**
+
 - Create: `src/domain/dedupe.ts`
 - Test: `tests/domain/dedupe.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Film` (Task 4), `matchKey` (Task 4).
 - Produces: `mergeLibraries(...libraries: Film[][]): Film[]`
 
@@ -1702,10 +1728,20 @@ describe('mergeLibraries', () => {
 
   it('prefers the record carrying a precise watch date', () => {
     const imdb = [
-      film({ title: 'Parasite', imdbId: 'tt6751668', watchedAt: new Date('2024-01-01'), watchedAtIsApproximate: true }),
+      film({
+        title: 'Parasite',
+        imdbId: 'tt6751668',
+        watchedAt: new Date('2024-01-01'),
+        watchedAtIsApproximate: true,
+      }),
     ];
     const letterboxd = [
-      film({ title: 'Parasite', imdbId: 'tt6751668', source: 'letterboxd', watchedAt: new Date('2023-09-01') }),
+      film({
+        title: 'Parasite',
+        imdbId: 'tt6751668',
+        source: 'letterboxd',
+        watchedAt: new Date('2023-09-01'),
+      }),
     ];
     const [merged] = mergeLibraries(imdb, letterboxd);
     expect(merged!.watchedAt).toEqual(new Date('2023-09-01'));
@@ -1713,8 +1749,12 @@ describe('mergeLibraries', () => {
   });
 
   it('fills gaps from whichever record has the metadata', () => {
-    const imdb = [film({ title: 'Parasite', imdbId: 'tt6751668', genres: ['Drama'], runtimeMinutes: 132 })];
-    const letterboxd = [film({ title: 'Parasite', imdbId: 'tt6751668', source: 'letterboxd', rating: 100 })];
+    const imdb = [
+      film({ title: 'Parasite', imdbId: 'tt6751668', genres: ['Drama'], runtimeMinutes: 132 }),
+    ];
+    const letterboxd = [
+      film({ title: 'Parasite', imdbId: 'tt6751668', source: 'letterboxd', rating: 100 }),
+    ];
     const [merged] = mergeLibraries(imdb, letterboxd);
     expect(merged!.genres).toEqual(['Drama']);
     expect(merged!.runtimeMinutes).toBe(132);
@@ -1801,10 +1841,12 @@ git commit -m "feat(domain): merge libraries imported from both services"
 ### Task 8: Filters
 
 **Files:**
+
 - Create: `src/domain/filters.ts`
 - Test: `tests/domain/filters.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Film` (Task 4).
 - Produces:
   - `interface FilterCriteria` with every field optional
@@ -1842,10 +1884,43 @@ function film(overrides: Partial<Film> & Pick<Film, 'title'>): Film {
 }
 
 const library: Film[] = [
-  film({ title: 'Loved', rating: 100, genres: ['Drama'], directors: ['Bong Joon-ho'], watchedAt: new Date('2025-02-01'), publicRating: 80, runtimeMinutes: 132 }),
-  film({ title: 'Liked', rating: 80, genres: ['Action'], directors: ['Christopher Nolan'], watchedAt: new Date('2024-05-01'), publicRating: 90, runtimeMinutes: 150 }),
-  film({ title: 'Meh', rating: 50, genres: ['Comedy'], directors: ['Christopher Nolan'], watchedAt: new Date('2023-03-01'), publicRating: 60, runtimeMinutes: 95, isRewatch: true }),
-  film({ title: 'Unrated', rating: null, genres: ['Horror'], directors: [], watchedAt: new Date('2025-01-01'), publicRating: null, runtimeMinutes: 88 }),
+  film({
+    title: 'Loved',
+    rating: 100,
+    genres: ['Drama'],
+    directors: ['Bong Joon-ho'],
+    watchedAt: new Date('2025-02-01'),
+    publicRating: 80,
+    runtimeMinutes: 132,
+  }),
+  film({
+    title: 'Liked',
+    rating: 80,
+    genres: ['Action'],
+    directors: ['Christopher Nolan'],
+    watchedAt: new Date('2024-05-01'),
+    publicRating: 90,
+    runtimeMinutes: 150,
+  }),
+  film({
+    title: 'Meh',
+    rating: 50,
+    genres: ['Comedy'],
+    directors: ['Christopher Nolan'],
+    watchedAt: new Date('2023-03-01'),
+    publicRating: 60,
+    runtimeMinutes: 95,
+    isRewatch: true,
+  }),
+  film({
+    title: 'Unrated',
+    rating: null,
+    genres: ['Horror'],
+    directors: [],
+    watchedAt: new Date('2025-01-01'),
+    publicRating: null,
+    runtimeMinutes: 88,
+  }),
 ];
 
 describe('applyFilters', () => {
@@ -1908,7 +1983,11 @@ describe('applyFilters', () => {
   });
 
   it('combines criteria conjunctively', () => {
-    const result = applyFilters(library, { minRating: 50, directors: ['Christopher Nolan'], maxRuntimeMinutes: 100 });
+    const result = applyFilters(library, {
+      minRating: 50,
+      directors: ['Christopher Nolan'],
+      maxRuntimeMinutes: 100,
+    });
     expect(result.map((f) => f.title)).toEqual(['Meh']);
   });
 });
@@ -1961,9 +2040,19 @@ export interface FilterCriteria {
 
 function matches(film: Film, criteria: FilterCriteria): boolean {
   const {
-    minRating, maxRating, onlyUnrated, watchedAfter, watchedBefore,
-    genres, directors, decades, minRuntimeMinutes, maxRuntimeMinutes,
-    onlyRewatches, minRatingDelta, maxRatingDelta,
+    minRating,
+    maxRating,
+    onlyUnrated,
+    watchedAfter,
+    watchedBefore,
+    genres,
+    directors,
+    decades,
+    minRuntimeMinutes,
+    maxRuntimeMinutes,
+    onlyRewatches,
+    minRatingDelta,
+    maxRatingDelta,
   } = criteria;
 
   if (onlyUnrated) return film.rating === null;
@@ -1977,15 +2066,24 @@ function matches(film: Film, criteria: FilterCriteria): boolean {
   if (watchedBefore && (!film.watchedAt || film.watchedAt > watchedBefore)) return false;
 
   if (genres?.length && !film.genres.some((genre) => genres.includes(genre))) return false;
-  if (directors?.length && !film.directors.some((director) => directors.includes(director))) return false;
+  if (directors?.length && !film.directors.some((director) => directors.includes(director)))
+    return false;
 
   if (decades?.length) {
     if (film.year === null) return false;
     if (!decades.includes(Math.floor(film.year / 10) * 10)) return false;
   }
 
-  if (minRuntimeMinutes !== undefined && (film.runtimeMinutes === null || film.runtimeMinutes < minRuntimeMinutes)) return false;
-  if (maxRuntimeMinutes !== undefined && (film.runtimeMinutes === null || film.runtimeMinutes > maxRuntimeMinutes)) return false;
+  if (
+    minRuntimeMinutes !== undefined &&
+    (film.runtimeMinutes === null || film.runtimeMinutes < minRuntimeMinutes)
+  )
+    return false;
+  if (
+    maxRuntimeMinutes !== undefined &&
+    (film.runtimeMinutes === null || film.runtimeMinutes > maxRuntimeMinutes)
+  )
+    return false;
 
   if (onlyRewatches && !film.isRewatch) return false;
 
@@ -2005,9 +2103,7 @@ export function applyFilters(films: Film[], criteria: FilterCriteria): Film[] {
 
   if (criteria.topN === undefined) return filtered;
 
-  return [...filtered]
-    .sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1))
-    .slice(0, criteria.topN);
+  return [...filtered].sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1)).slice(0, criteria.topN);
 }
 
 function uniqueSorted(values: string[]): string[] {
@@ -2040,10 +2136,12 @@ git commit -m "feat(domain): add the full filter criteria set"
 ### Task 9: Tier definitions and auto-assignment
 
 **Files:**
+
 - Create: `src/domain/tiers.ts`
 - Test: `tests/domain/tiers.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Film` (Task 4).
 - Produces:
   - `interface Tier { id: string; label: string; color: string; minRating: number | null }`
@@ -2064,14 +2162,34 @@ import type { Film } from '@/domain/film';
 
 function film(id: string, rating: number | null): Film {
   return {
-    id, imdbId: null, tmdbId: null, title: id, year: 2000,
-    rating, ratingScale: 'imdb10', watchedAt: null, watchedAtIsApproximate: false,
-    isRewatch: false, genres: [], directors: [], runtimeMinutes: null,
-    publicRating: null, posterPath: null, source: 'imdb',
+    id,
+    imdbId: null,
+    tmdbId: null,
+    title: id,
+    year: 2000,
+    rating,
+    ratingScale: 'imdb10',
+    watchedAt: null,
+    watchedAtIsApproximate: false,
+    isRewatch: false,
+    genres: [],
+    directors: [],
+    runtimeMinutes: null,
+    publicRating: null,
+    posterPath: null,
+    source: 'imdb',
   };
 }
 
-const films = [film('a', 95), film('b', 85), film('c', 75), film('d', 65), film('e', 55), film('f', 30), film('g', null)];
+const films = [
+  film('a', 95),
+  film('b', 85),
+  film('c', 75),
+  film('d', 65),
+  film('e', 55),
+  film('f', 30),
+  film('g', null),
+];
 
 describe('createEmptyBoard', () => {
   it('puts every film in the pool and none in a tier', () => {
@@ -2284,11 +2402,11 @@ Expected: the CI workflow passes on the pushed commit. The data core is complete
 ## Definition of done
 
 - [ ] The public repository `cinetier` exists, with CI and Pages deployment both green.
-- [ ] `https://<owner>.github.io/cinetier/` loads.
-- [ ] No secret has ever entered git history: searching `git log -p` for the key *value* finds nothing.
+- [ ] `https://myqzurdux3.github.io/cinetier/` loads.
+- [ ] No secret has ever entered git history: searching `git log -p` for the key _value_ finds nothing.
 - [ ] `npm run test:run` passes, covering both parsers, rating conversion, deduplication, all filters, and tier assignment.
 - [ ] `npm run typecheck` and `npm run lint` pass, including the layer-boundary rule.
 - [ ] Both real export formats parse correctly from committed fixtures.
 - [ ] README, LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, and SECURITY are all present and were
-      committed *before* the repository was made public.
+      committed _before_ the repository was made public.
 - [ ] A commit with a non-conventional message is rejected by the commitlint hook.
