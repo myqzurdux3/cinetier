@@ -73,6 +73,8 @@ function blankFilm(slug: string, row: Record<string, string>): Film {
     rating: null,
     ratingScale: 'letterboxd5',
     watchedAt: null,
+    // Only diary.csv's "Watched Date" is a real watch date; every other column
+    // this parser can fall back to is a rating or logging date standing in for one.
     watchedAtIsApproximate: false,
     isRewatch: false,
     // Letterboxd exports carry no metadata; TMDB enrichment fills these in plan 2.
@@ -83,6 +85,45 @@ function blankFilm(slug: string, row: Record<string, string>): Film {
     posterPath: null,
     source: 'letterboxd',
   };
+}
+
+/** One diary row's contribution: diary.csv holds a row per viewing, not per film. */
+interface Viewing {
+  watchedAt: Date | null;
+  watchedAtIsApproximate: boolean;
+  rating: number | null;
+  rewatchFlag: boolean;
+}
+
+interface DiaryHistory {
+  film: Film;
+  viewings: number;
+  anyRewatchFlag: boolean;
+  /** The viewing whose date and rating the Film reports. */
+  viewing: Viewing;
+}
+
+/**
+ * Which of two viewings the film should report. A dated row always beats an
+ * undated one and the newest date wins; the remaining comparisons only break
+ * ties, so the fold never depends on the order the rows appear in the file.
+ */
+function isLaterViewing(candidate: Viewing, current: Viewing): boolean {
+  if (candidate.watchedAt === null) return false;
+  if (current.watchedAt === null) return true;
+  const difference = candidate.watchedAt.getTime() - current.watchedAt.getTime();
+  if (difference !== 0) return difference > 0;
+  if (candidate.watchedAtIsApproximate !== current.watchedAtIsApproximate) {
+    return !candidate.watchedAtIsApproximate;
+  }
+  return current.rating === null && candidate.rating !== null;
+}
+
+/** Fill a missing watch date from a column that is not a watch date, and say so. */
+function applyApproximateDate(film: Film, date: Date | null): void {
+  if (film.watchedAt !== null || date === null) return;
+  film.watchedAt = date;
+  film.watchedAtIsApproximate = true;
 }
 
 /**
@@ -114,15 +155,40 @@ export function parseLetterboxdExport(files: LetterboxdFiles): ParseResult {
 
   // The diary is the only file with watch dates and rewatch flags.
   if (files.diary) {
+    const history = new Map<string, DiaryHistory>();
     for (const row of parseCsv(files.diary, ['Name', 'Letterboxd URI', 'Watched Date'])) {
       const name = (row['Name'] ?? '').trim();
       const parsedRating = normalizeRowRating(row, name, warnings);
       if (!parsedRating.ok) continue;
       const film = upsert(row);
       if (!film) continue;
-      if (parsedRating.rating !== null) film.rating = parsedRating.rating;
-      film.watchedAt = parseDate(row['Watched Date']) ?? parseDate(row['Date']);
-      film.isRewatch = (row['Rewatch'] ?? '').trim().toLowerCase() === 'yes';
+      const watchedAt = parseDate(row['Watched Date']);
+      const viewing: Viewing = {
+        // "Date" is the day the entry was logged, so it is only ever an approximation.
+        watchedAt: watchedAt ?? parseDate(row['Date']),
+        watchedAtIsApproximate: watchedAt === null,
+        rating: parsedRating.rating,
+        rewatchFlag: (row['Rewatch'] ?? '').trim().toLowerCase() === 'yes',
+      };
+      const seen = history.get(film.id);
+      if (!seen) {
+        history.set(film.id, { film, viewings: 1, anyRewatchFlag: viewing.rewatchFlag, viewing });
+        continue;
+      }
+      seen.viewings += 1;
+      seen.anyRewatchFlag ||= viewing.rewatchFlag;
+      if (isLaterViewing(viewing, seen.viewing)) seen.viewing = viewing;
+    }
+    for (const { film, viewings, anyRewatchFlag, viewing } of history.values()) {
+      // A second row for the same film is itself a rewatch, whether or not
+      // Letterboxd flagged it as one.
+      film.isRewatch = film.isRewatch || anyRewatchFlag || viewings > 1;
+      if (viewing.watchedAt !== null) {
+        film.watchedAt = viewing.watchedAt;
+        film.watchedAtIsApproximate = viewing.watchedAtIsApproximate;
+      }
+      // The rating travels with the date, so the two always describe one viewing.
+      if (viewing.rating !== null) film.rating = viewing.rating;
     }
   }
 
@@ -137,7 +203,8 @@ export function parseLetterboxdExport(files: LetterboxdFiles): ParseResult {
       if (film.rating === null && parsedRating.rating !== null) {
         film.rating = parsedRating.rating;
       }
-      film.watchedAt ??= parseDate(row['Date']);
+      // "Date" here is the date rated, not a watch date.
+      applyApproximateDate(film, parseDate(row['Date']));
     }
   }
 
@@ -146,7 +213,8 @@ export function parseLetterboxdExport(files: LetterboxdFiles): ParseResult {
     for (const row of parseCsv(files.watched, ['Name', 'Letterboxd URI'])) {
       const film = upsert(row);
       if (!film) continue;
-      film.watchedAt ??= parseDate(row['Date']);
+      // "Date" here is the date the film was added to the watched list.
+      applyApproximateDate(film, parseDate(row['Date']));
     }
   }
 

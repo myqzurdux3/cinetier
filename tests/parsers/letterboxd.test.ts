@@ -228,4 +228,108 @@ describe('parseLetterboxdExport', () => {
     expect(result.films).toHaveLength(before.films.length);
     expect(result.warnings).toContain('Skipped a row that could not be read: "untitled".');
   });
+  it('marks a ratings-only date as approximate, because it is a rating date', () => {
+    const stalker = parseLetterboxdExport(files).films.find((f) => f.title === 'Stalker')!;
+    expect(stalker.watchedAt).toEqual(new Date('2023-05-18'));
+    expect(stalker.watchedAtIsApproximate).toBe(true);
+  });
+
+  it('marks a watched-only date as approximate, because it is the date the film was added', () => {
+    const solaris = parseLetterboxdExport(files).films.find((f) => f.title === 'Solaris')!;
+    expect(solaris.watchedAt).toEqual(new Date('2022-02-02'));
+    expect(solaris.watchedAtIsApproximate).toBe(true);
+  });
+
+  it('marks a diary row that falls back to its logged date as approximate', () => {
+    const garbledDate = diaryRow({
+      Date: '2025-04-11',
+      Name: 'Logged Date Film',
+      Year: '2020',
+      'Letterboxd URI': 'https://boxd.it/loggeddate',
+      'Watched Date': 'not-a-date',
+    });
+    const result = parseLetterboxdExport({ diary: `${files.diary}\n${garbledDate}` });
+    const film = result.films.find((f) => f.title === 'Logged Date Film')!;
+    expect(film.watchedAt).toEqual(new Date('2025-04-11'));
+    expect(film.watchedAtIsApproximate).toBe(true);
+  });
+
+  it('keeps a diary watch date precise when the other files also list the film', () => {
+    const matrix = parseLetterboxdExport(files).films.find((f) => f.title === 'The Matrix')!;
+    expect(matrix.watchedAt).toEqual(new Date('2025-03-09'));
+    expect(matrix.watchedAtIsApproximate).toBe(false);
+  });
+
+  describe('a film with more than one diary row', () => {
+    const header = DIARY_COLUMNS.join(',');
+    const firstViewing = diaryRow({
+      Date: '2019-02-01',
+      Name: 'Solaris',
+      Year: '1972',
+      'Letterboxd URI': 'https://boxd.it/9m0n',
+      Rating: '4',
+      'Watched Date': '2019-01-31',
+    });
+    const secondViewing = diaryRow({
+      Date: '2025-06-01',
+      Name: 'Solaris',
+      Year: '1972',
+      'Letterboxd URI': 'https://boxd.it/9m0n',
+      Rating: '5',
+      Rewatch: 'Yes',
+      'Watched Date': '2025-05-31',
+    });
+
+    /** diary.csv holds one row per viewing, so a repeated slug is a rewatch, not a corruption. */
+    function parseViewings(rows: string[]) {
+      const result = parseLetterboxdExport({ diary: [header, ...rows].join('\n') });
+      expect(result.films).toHaveLength(1);
+      return result.films[0]!;
+    }
+
+    it('reports the newest viewing and its rating, whichever order the rows appear in', () => {
+      const newestFirst = parseViewings([secondViewing, firstViewing]);
+      const oldestFirst = parseViewings([firstViewing, secondViewing]);
+      expect(newestFirst).toEqual(oldestFirst);
+      expect(newestFirst.watchedAt).toEqual(new Date('2025-05-31'));
+      expect(newestFirst.watchedAtIsApproximate).toBe(false);
+      expect(newestFirst.rating).toBe(100);
+      expect(newestFirst.isRewatch).toBe(true);
+    });
+
+    it('counts a repeated viewing as a rewatch even when no row carries the flag', () => {
+      const unflaggedRepeat = diaryRow({
+        Date: '2025-06-01',
+        Name: 'Solaris',
+        Year: '1972',
+        'Letterboxd URI': 'https://boxd.it/9m0n',
+        Rating: '5',
+        'Watched Date': '2025-05-31',
+      });
+      expect(parseViewings([firstViewing, unflaggedRepeat]).isRewatch).toBe(true);
+      expect(parseViewings([unflaggedRepeat, firstViewing]).isRewatch).toBe(true);
+    });
+
+    it('keeps a rewatch flag that only the older viewing carries', () => {
+      const flaggedOlder = diaryRow({
+        Date: '2019-02-01',
+        Name: 'Solaris',
+        Year: '1972',
+        'Letterboxd URI': 'https://boxd.it/9m0n',
+        Rating: '4',
+        Rewatch: 'Yes',
+        'Watched Date': '2019-01-31',
+      });
+      const unflaggedNewer = diaryRow({
+        Date: '2025-06-01',
+        Name: 'Solaris',
+        Year: '1972',
+        'Letterboxd URI': 'https://boxd.it/9m0n',
+        Rating: '5',
+        'Watched Date': '2025-05-31',
+      });
+      expect(parseViewings([flaggedOlder, unflaggedNewer]).isRewatch).toBe(true);
+      expect(parseViewings([unflaggedNewer, flaggedOlder]).isRewatch).toBe(true);
+    });
+  });
 });
