@@ -9,6 +9,22 @@ const files = {
   watched: readFileSync('tests/fixtures/letterboxd-watched.csv', 'utf8'),
 };
 
+const DIARY_COLUMNS = [
+  'Date',
+  'Name',
+  'Year',
+  'Letterboxd URI',
+  'Rating',
+  'Rewatch',
+  'Tags',
+  'Watched Date',
+] as const;
+
+/** Build one diary row; unspecified columns come through blank, as a damaged export would produce. */
+function diaryRow(fields: Partial<Record<(typeof DIARY_COLUMNS)[number], string>>): string {
+  return DIARY_COLUMNS.map((column) => fields[column] ?? '').join(',');
+}
+
 describe('parseLetterboxdExport', () => {
   it('merges the three files into one entry per film', () => {
     const result = parseLetterboxdExport(files);
@@ -95,5 +111,121 @@ describe('parseLetterboxdExport', () => {
     expect(result.films.some((f) => f.id === 'lb:bad6')).toBe(false);
     expect(result.films.some((f) => f.title === 'Bad Six')).toBe(false);
     expect(result.warnings.join(' ')).toMatch(/Bad Six/);
+  });
+
+  it('skips a diary row with a blank Name, keeping the rest of the file', () => {
+    const blankName = diaryRow({
+      Date: '2025-04-01',
+      Year: '2020',
+      'Letterboxd URI': 'https://boxd.it/blankname',
+      Rating: '4',
+      'Watched Date': '2025-04-01',
+    });
+    const before = parseLetterboxdExport({ diary: files.diary });
+    const result = parseLetterboxdExport({ diary: `${files.diary}\n${blankName}` });
+    expect(result.films).toHaveLength(before.films.length);
+    expect(result.warnings).toContain('Skipped a row that could not be read: "untitled".');
+  });
+
+  it('skips diary rows whose Letterboxd URI yields no usable slug', () => {
+    const emptyUri = diaryRow({
+      Date: '2025-04-02',
+      Name: 'Empty URI Film',
+      Year: '2020',
+      'Letterboxd URI': '',
+      'Watched Date': '2025-04-02',
+    });
+    const trailingSlashOnlyUri = diaryRow({
+      Date: '2025-04-03',
+      Name: 'Trailing Slash Film',
+      Year: '2020',
+      'Letterboxd URI': '/',
+      'Watched Date': '2025-04-03',
+    });
+    const before = parseLetterboxdExport({ diary: files.diary });
+    const result = parseLetterboxdExport({
+      diary: `${files.diary}\n${emptyUri}\n${trailingSlashOnlyUri}`,
+    });
+    expect(result.films).toHaveLength(before.films.length);
+    expect(result.films.map((f) => f.title)).not.toContain('Empty URI Film');
+    expect(result.films.map((f) => f.title)).not.toContain('Trailing Slash Film');
+    expect(result.warnings).toContain('Skipped a row that could not be read: "Empty URI Film".');
+    expect(result.warnings).toContain(
+      'Skipped a row that could not be read: "Trailing Slash Film".',
+    );
+  });
+
+  it('falls back to Date and treats a diary row as unrated when its trailing columns are cut off', () => {
+    // A line cut off mid-export leaves Rating, Rewatch, Tags, and Watched Date
+    // entirely absent (not merely blank), which is a distinct shape from a blank value.
+    const severelyTruncated = '2025-04-06,Truncated Film,2020,https://boxd.it/truncated';
+    const result = parseLetterboxdExport({ diary: `${files.diary}\n${severelyTruncated}` });
+    const film = result.films.find((f) => f.title === 'Truncated Film');
+    expect(film).toMatchObject({ rating: null, isRewatch: false });
+    expect(film!.watchedAt).toEqual(new Date('2025-04-06'));
+  });
+
+  it('treats a non-numeric diary rating as unrated rather than erroring', () => {
+    const garbledRating = diaryRow({
+      Date: '2025-04-08',
+      Name: 'Garbled Rating Film',
+      Year: '2020',
+      'Letterboxd URI': 'https://boxd.it/garbledrating',
+      Rating: 'abc',
+      'Watched Date': '2025-04-08',
+    });
+    const result = parseLetterboxdExport({ diary: `${files.diary}\n${garbledRating}` });
+    const film = result.films.find((f) => f.title === 'Garbled Rating Film');
+    expect(film).toBeDefined();
+    expect(film!.rating).toBeNull();
+  });
+
+  it('falls back to Date when a diary row has an unparsable Watched Date', () => {
+    const garbledDate = diaryRow({
+      Date: '2025-04-09',
+      Name: 'Garbled Date Film',
+      Year: '2020',
+      'Letterboxd URI': 'https://boxd.it/garbleddate',
+      'Watched Date': 'not-a-date',
+    });
+    const result = parseLetterboxdExport({ diary: `${files.diary}\n${garbledDate}` });
+    const film = result.films.find((f) => f.title === 'Garbled Date Film');
+    expect(film!.watchedAt).toEqual(new Date('2025-04-09'));
+  });
+
+  it('reports an out-of-range diary rating as "untitled" when the Name is also blank', () => {
+    const blankNameBadRating = diaryRow({
+      Date: '2025-04-14',
+      Year: '2020',
+      'Letterboxd URI': 'https://boxd.it/blanknamebadrating',
+      Rating: '6',
+      'Watched Date': '2025-04-14',
+    });
+    const result = parseLetterboxdExport({ diary: `${files.diary}\n${blankNameBadRating}` });
+    expect(result.warnings).toContain('Skipped a row with an out-of-range rating: "untitled".');
+  });
+
+  it('skips a diary row truncated before its Name column, keeping the rest of the file', () => {
+    const ultraTruncated = '2025-04-10';
+    const before = parseLetterboxdExport({ diary: files.diary });
+    const result = parseLetterboxdExport({ diary: `${files.diary}\n${ultraTruncated}` });
+    expect(result.films).toHaveLength(before.films.length);
+    expect(result.warnings).toContain('Skipped a row that could not be read: "untitled".');
+  });
+
+  it('skips a ratings-only row truncated before its Name column, keeping the rest of the file', () => {
+    const ultraTruncated = '2025-04-12';
+    const before = parseLetterboxdExport({ ratings: files.ratings });
+    const result = parseLetterboxdExport({ ratings: `${files.ratings}\n${ultraTruncated}` });
+    expect(result.films).toHaveLength(before.films.length);
+    expect(result.warnings).toContain('Skipped a row that could not be read: "untitled".');
+  });
+
+  it('skips a watched-only row truncated before its Name column, keeping the rest of the file', () => {
+    const ultraTruncated = '2025-04-13';
+    const before = parseLetterboxdExport({ watched: files.watched });
+    const result = parseLetterboxdExport({ watched: `${files.watched}\n${ultraTruncated}` });
+    expect(result.films).toHaveLength(before.films.length);
+    expect(result.warnings).toContain('Skipped a row that could not be read: "untitled".');
   });
 });
