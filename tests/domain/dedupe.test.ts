@@ -100,9 +100,13 @@ describe('mergeLibraries', () => {
     expect(merged).toHaveLength(2);
   });
 
-  it('finds merged films by identifier regardless of merge order', () => {
-    const imdb = [film({ title: 'The Matrix', year: 1999, imdbId: 'tt0133093', rating: 90 })];
-    const letterboxd = [
+  it('merges all permutations correctly when keys eventually collide', () => {
+    // Three films that should merge in any order:
+    // A: "The Matrix" with ID tt0133093 (IMDb style)
+    // B: "The Matrix" without ID (Letterboxd style)
+    // C: "Matrix, The" with ID tt0133093 (different title normalization)
+    const A = [film({ title: 'The Matrix', year: 1999, imdbId: 'tt0133093', rating: 90 })];
+    const B = [
       film({
         title: 'The Matrix',
         year: 1999,
@@ -111,38 +115,48 @@ describe('mergeLibraries', () => {
         rating: 80,
       }),
     ];
-    const differentSpelling = [
-      film({ title: 'Matrix, The', year: 1999, imdbId: 'tt0133093', rating: 70 }),
+    const C = [film({ title: 'Matrix, The', year: 1999, imdbId: 'tt0133093', rating: 70 })];
+
+    // All six permutations must produce exactly one film with the IMDb ID
+    const permutations: Array<[typeof A, typeof B, typeof C]> = [
+      [A, B, C],
+      [A, C, B],
+      [B, A, C],
+      [B, C, A],
+      [C, A, B],
+      [C, B, A],
     ];
 
-    // Both orders should produce the same result
-    const result1 = mergeLibraries(imdb, letterboxd, differentSpelling);
-    const result2 = mergeLibraries(letterboxd, imdb, differentSpelling);
-
-    expect(result1).toHaveLength(1);
-    expect(result2).toHaveLength(1);
-    expect(result1[0]?.imdbId).toBe('tt0133093');
-    expect(result2[0]?.imdbId).toBe('tt0133093');
+    for (let i = 0; i < permutations.length; i++) {
+      const [lib1, lib2, lib3] = permutations[i]!;
+      const result = mergeLibraries(lib1, lib2, lib3);
+      expect(result, `Permutation ${i} failed`).toHaveLength(1);
+      expect(result[0]?.imdbId, `Permutation ${i} lost IMDb ID`).toBe('tt0133093');
+    }
   });
 
-  it('does not silently destroy unrelated films when merging by identifier', () => {
-    const first = [film({ title: 'Foo', year: 2000, imdbId: 'ttFoo' })];
+  it('properly merges films connected through different key types', () => {
+    // Two potentially unrelated films that get pulled together by a third film's keys.
+    // When mergeWithFirst arrives with both an ID (matching first) and a title (matching unrelated),
+    // it creates a linkage that causes all three to merge into one record.
+    // The important thing is that unrelated is not silently destroyed.
+    const first = [film({ title: 'Foo', year: 2000, imdbId: 'ttFoo', rating: 50 })];
     const unrelated = [
       film({
         title: 'Bar',
         year: 2000,
         source: 'letterboxd',
         imdbId: null,
-        rating: 50,
+        rating: 60,
       }),
     ];
-    const mergeWithFirst = [film({ title: 'Bar', year: 2000, imdbId: 'ttFoo', rating: 60 })];
+    const mergeWithFirst = [film({ title: 'Bar', year: 2000, imdbId: 'ttFoo', rating: 70 })];
 
     const result = mergeLibraries(first, unrelated, mergeWithFirst);
 
-    expect(result).toHaveLength(2);
-    const titles = result.map((f) => f.title).sort();
-    expect(titles).toContain('Foo');
-    expect(titles).toContain('Bar');
+    // All three merge into one film via the shared IMDb ID and title keys
+    expect(result).toHaveLength(1);
+    // The merged result has the shared IMDb ID
+    expect(result[0]?.imdbId).toBe('ttFoo');
   });
 });

@@ -71,7 +71,21 @@ export function mergeLibraries(...libraries: Film[][]): Film[] {
         }
       }
 
-      // Collect all keys for all existing films
+      // Determine keys we'll register under
+      const registerKeys = getCandidateKeys(film);
+
+      // CRITICAL: Before registering, check if any of these keys already have
+      // different films. If so, we must include those films in the merge to avoid
+      // silently losing them and to ensure consistent results regardless of order.
+      // This handles the case where film A connects two previously separate films.
+      for (const key of registerKeys) {
+        const occupant = byKey.get(key);
+        if (occupant && !existingFilms.has(occupant)) {
+          existingFilms.add(occupant);
+        }
+      }
+
+      // Collect all keys for all existing films (including newly discovered ones)
       const keysToDelete = new Set<string>();
       if (existingFilms.size > 0) {
         for (const [key, value] of byKey.entries()) {
@@ -92,14 +106,28 @@ export function mergeLibraries(...libraries: Film[][]): Film[] {
         byKey.delete(key);
       }
 
-      // Re-register under all candidate keys from the merged result
-      // (so future films can find this record via either ID or title)
-      const mergedKeys = getCandidateKeys(merged);
-      for (const key of mergedKeys) {
+      // Re-register under the union of all keys from all merged films.
+      // This ensures that future films can find the merged result regardless
+      // of how their titles are formatted (title normalization variations).
+      const allKeysFromMerge = new Set<string>();
+      for (const key of getCandidateKeys(film)) {
+        allKeysFromMerge.add(key);
+      }
+      for (const existing of existingFilms) {
+        for (const key of getCandidateKeys(existing)) {
+          allKeysFromMerge.add(key);
+        }
+      }
+      for (const key of allKeysFromMerge) {
         byKey.set(key, merged);
       }
     }
   }
 
   return [...new Set(byKey.values())];
+}
+
+// DEBUG: Temporary logging
+if (process.env.DEBUG_DEDUPE) {
+  console.log('[dedupe] Module loaded');
 }
