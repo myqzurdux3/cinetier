@@ -70,4 +70,16 @@ describe('parseImdbRatings', () => {
     expect(result.warnings.join(' ')).toMatch(/Too High/);
     expect(result.warnings.join(' ')).toMatch(/Too Low/);
   });
+
+  it('degrades an out-of-range public rating to null while keeping the row', () => {
+    const withBadPublicRating =
+      `${fixture}\n` +
+      'tt5555503,7,2023-01-01,Bad Public Rating,,,Movie,99,120,2020,Drama,1000,2020-01-01,Someone';
+    const result = parseImdbRatings(withBadPublicRating);
+    const film = result.films.find((f) => f.title === 'Bad Public Rating')!;
+    expect(film).toBeDefined();
+    expect(film.rating).toBe(70);
+    expect(film.publicRating).toBeNull();
+    expect(result.warnings.join(' ')).toMatch(/Bad Public Rating/);
+  });
 });
