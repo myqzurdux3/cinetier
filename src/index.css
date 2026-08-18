@@ -3,6 +3,8 @@
 @theme {
   --color-screen: #0a0a0b;
   --color-surface: #141417;
+  --color-logo-body: #2a2a30;
+  --color-logo-outline: #3f3f46;
   --color-accent: #e8b44a;
   --color-tier-s: #e05263;
   --color-tier-a: #e8834a;

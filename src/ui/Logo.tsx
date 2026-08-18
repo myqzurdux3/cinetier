@@ -16,9 +16,23 @@ export function Logo({ size = 28 }: LogoProps) {
       aria-label="Cinetier"
       fill="none"
     >
-      <rect x="2" y="11" width="28" height="19" rx="3" fill="var(--color-surface)" />
+      <rect
+        x="2"
+        y="11"
+        width="28"
+        height="19"
+        rx="3"
+        fill="var(--color-logo-body)"
+        stroke="var(--color-logo-outline)"
+        strokeWidth="1"
+      />
       <g>
-        <path d="M2 4.5 L30 2 L30 10 L2 12.5 Z" fill="#1c1c20" />
+        <path
+          d="M2 4.5 L30 2 L30 10 L2 12.5 Z"
+          fill="var(--color-logo-body)"
+          stroke="var(--color-logo-outline)"
+          strokeWidth="1"
+        />
         <path d="M5 4.2 L9 3.8 L6.5 11.6 L2.5 12 Z" fill="var(--color-tier-s)" />
         <path d="M12 3.6 L16 3.2 L13.5 11 L9.5 11.4 Z" fill="var(--color-tier-a)" />
         <path d="M19 3 L23 2.6 L20.5 10.4 L16.5 10.8 Z" fill="var(--color-tier-b)" />
