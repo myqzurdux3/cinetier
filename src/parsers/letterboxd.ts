@@ -116,7 +116,13 @@ function isLaterViewing(candidate: Viewing, current: Viewing): boolean {
   if (candidate.watchedAtIsApproximate !== current.watchedAtIsApproximate) {
     return !candidate.watchedAtIsApproximate;
   }
-  return current.rating === null && candidate.rating !== null;
+  if (current.rating === null && candidate.rating !== null) return true;
+  // Same date, same precision, both rated: prefer the higher rating. Without this
+  // the winner would be whichever row the file happened to list first.
+  if (current.rating !== null && candidate.rating !== null) {
+    return candidate.rating > current.rating;
+  }
+  return false;
 }
 
 /** Fill a missing watch date from a column that is not a watch date, and say so. */

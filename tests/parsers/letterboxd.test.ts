@@ -382,5 +382,21 @@ describe('parseLetterboxdExport', () => {
       expect(parseViewings([flaggedOlder, unflaggedNewer]).isRewatch).toBe(true);
       expect(parseViewings([unflaggedNewer, flaggedOlder]).isRewatch).toBe(true);
     });
+
+    it('resolves a same-day double viewing the same way in either row order', () => {
+      const header = 'Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date';
+      const lower = '2025-06-01,Heat,1995,https://boxd.it/heat,3,,,2025-05-31';
+      const higher = '2025-06-02,Heat,1995,https://boxd.it/heat,5,Yes,,2025-05-31';
+
+      const lowerFirst = parseLetterboxdExport({ diary: [header, lower, higher].join('\n') })
+        .films[0]!;
+      const higherFirst = parseLetterboxdExport({ diary: [header, higher, lower].join('\n') })
+        .films[0]!;
+
+      expect(lowerFirst.rating).toBe(higherFirst.rating);
+      // The higher rating wins: it is the stronger opinion the viewer expressed about that day.
+      expect(lowerFirst.rating).toBe(100);
+      expect(lowerFirst.isRewatch).toBe(true);
+    });
   });
 });
