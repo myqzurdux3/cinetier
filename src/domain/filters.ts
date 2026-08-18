@@ -38,10 +38,14 @@ function matches(film: Film, criteria: FilterCriteria): boolean {
     maxRatingDelta,
   } = criteria;
 
-  if (onlyUnrated) return film.rating === null;
+  // onlyUnrated is a criterion on the rating axis, not a short circuit: it must combine
+  // conjunctively with every other criterion rather than swallowing them.
+  if (onlyUnrated && film.rating !== null) return false;
 
   // An unrated film cannot satisfy a rating threshold, so exclude it rather than
-  // treating a missing rating as zero.
+  // treating a missing rating as zero. (When onlyUnrated is also set, film.rating is
+  // already null here, so minRating/maxRating correctly exclude it too — the
+  // contradictory combination falls out of this check with no special-casing.)
   if (minRating !== undefined && (film.rating === null || film.rating < minRating)) return false;
   if (maxRating !== undefined && (film.rating === null || film.rating > maxRating)) return false;
 

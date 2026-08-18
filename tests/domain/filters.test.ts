@@ -77,6 +77,20 @@ describe('applyFilters', () => {
     expect(applyFilters(library, { onlyUnrated: true }).map((f) => f.title)).toEqual(['Unrated']);
   });
 
+  it('combines onlyUnrated with a genre filter', () => {
+    const withComedy = [
+      ...library,
+      film({ title: 'Unrated Comedy', rating: null, genres: ['Comedy'], publicRating: null }),
+    ];
+    const result = applyFilters(withComedy, { onlyUnrated: true, genres: ['Horror'] });
+    expect(result.map((f) => f.title)).toEqual(['Unrated']);
+  });
+
+  it('combines onlyUnrated with a runtime filter', () => {
+    const result = applyFilters(library, { onlyUnrated: true, maxRuntimeMinutes: 80 });
+    expect(result.map((f) => f.title)).toEqual([]);
+  });
+
   it('filters by watch date range', () => {
     const result = applyFilters(library, { watchedAfter: new Date('2025-01-01') });
     expect(result.map((f) => f.title).sort()).toEqual(['Loved', 'Unrated']);
