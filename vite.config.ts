@@ -13,6 +13,12 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
-    coverage: { provider: 'v8', include: ['src/domain/**', 'src/parsers/**'] },
+    coverage: {
+      provider: 'v8',
+      include: ['src/domain/**', 'src/parsers/**'],
+      // The definition of done for the pure layers, enforced by CI rather than
+      // by a sentence in a document.
+      thresholds: { statements: 90, branches: 85, functions: 90, lines: 90 },
+    },
   },
 });
