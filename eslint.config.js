@@ -30,6 +30,7 @@ export default tseslint.config(
         { name: 'window', message: 'domain/ and parsers/ must not touch the DOM.' },
         { name: 'fetch', message: 'Network access belongs in services/.' },
         { name: 'localStorage', message: 'Storage access belongs in services/.' },
+        { name: 'process', message: 'domain/ and parsers/ run in the browser, not in Node.' },
       ],
     },
   },
