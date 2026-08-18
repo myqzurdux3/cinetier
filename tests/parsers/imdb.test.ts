@@ -59,4 +59,15 @@ describe('parseImdbRatings', () => {
     expect(result.films).toHaveLength(5);
     expect(result.warnings.join(' ')).toMatch(/Broken Row/);
   });
+
+  it('tolerates an out-of-range rating without losing the rest of the file', () => {
+    const withBadRatings =
+      `${fixture}\n` +
+      'tt5555501,11,2023-01-01,Too High,,,Movie,8.0,120,2020,Drama,1000,2020-01-01,Someone\n' +
+      'tt5555502,0,2023-01-01,Too Low,,,Movie,8.0,120,2020,Drama,1000,2020-01-01,Someone';
+    const result = parseImdbRatings(withBadRatings);
+    expect(result.films).toHaveLength(5);
+    expect(result.warnings.join(' ')).toMatch(/Too High/);
+    expect(result.warnings.join(' ')).toMatch(/Too Low/);
+  });
 });

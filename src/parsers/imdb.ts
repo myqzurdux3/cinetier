@@ -60,7 +60,30 @@ export function parseImdbRatings(csvText: string): ParseResult {
       continue;
     }
 
-    const publicRating = parseNumber(row['IMDb Rating']);
+    // The user's own rating must be valid for the row to mean anything; a
+    // corrupted or hand-edited export can carry a value outside 1-10, and
+    // that should cost this one row, not the whole import.
+    let rating: number;
+    try {
+      rating = normalizeRating(rawRating, 'imdb10');
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+      warnings.push(`Skipped a row with an out-of-range rating: "${title}".`);
+      continue;
+    }
+
+    // The public rating is informational, not the user's own data, so a
+    // corrupted value degrades to "unknown" rather than dropping the row.
+    const rawPublicRating = parseNumber(row['IMDb Rating']);
+    let publicRating: number | null = null;
+    if (rawPublicRating !== null) {
+      try {
+        publicRating = normalizeRating(rawPublicRating, 'imdb10');
+      } catch (error) {
+        if (!(error instanceof RangeError)) throw error;
+        warnings.push(`Ignored an out-of-range public rating for "${title}".`);
+      }
+    }
 
     films.push({
       id: `imdb:${imdbId}`,
@@ -68,7 +91,7 @@ export function parseImdbRatings(csvText: string): ParseResult {
       tmdbId: null,
       title,
       year: parseNumber(row['Year']),
-      rating: normalizeRating(rawRating, 'imdb10'),
+      rating,
       ratingScale: 'imdb10',
       watchedAt: parseDate(row['Date Rated']),
       // IMDb never exports a watch date. This is the date the user rated the film.
@@ -77,7 +100,7 @@ export function parseImdbRatings(csvText: string): ParseResult {
       genres: splitList(row['Genres']),
       directors: splitList(row['Directors']),
       runtimeMinutes: parseNumber(row['Runtime (mins)']),
-      publicRating: publicRating === null ? null : normalizeRating(publicRating, 'imdb10'),
+      publicRating,
       posterPath: null,
       source: 'imdb',
     });
