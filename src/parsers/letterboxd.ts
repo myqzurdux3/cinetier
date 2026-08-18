@@ -1,7 +1,7 @@
 import Papa from 'papaparse';
 import type { Film } from '@/domain/film';
 import { normalizeRating } from '@/domain/rating';
-import { ParseError, requireColumns, type ParseResult } from './types';
+import { ParseError, requireColumns, parseNumber, parseDate, type ParseResult } from './types';
 
 export interface LetterboxdFiles {
   diary?: string;
@@ -18,18 +18,6 @@ function slugFromUri(uri: string | undefined): string | null {
   const trimmed = uri.trim().replace(/\/$/, '');
   const slug = trimmed.split('/').pop();
   return slug && slug !== '' ? slug : null;
-}
-
-function parseNumber(value: string | undefined): number | null {
-  if (!value || value.trim() === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parseDate(value: string | undefined): Date | null {
-  if (!value || value.trim() === '') return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function parseCsv(text: string, required: string[]): Record<string, string>[] {

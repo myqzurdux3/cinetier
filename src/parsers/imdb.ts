@@ -1,7 +1,7 @@
 import Papa from 'papaparse';
 import type { Film } from '@/domain/film';
 import { normalizeRating } from '@/domain/rating';
-import { ParseError, requireColumns, type ParseResult } from './types';
+import { ParseError, requireColumns, parseNumber, parseDate, type ParseResult } from './types';
 
 const REQUIRED = ['Const', 'Your Rating', 'Title', 'Title Type', 'Year'];
 const HINT = 'Export "Your Ratings" from IMDb and upload the ratings.csv file it produces.';
@@ -12,18 +12,6 @@ function splitList(value: string | undefined): string[] {
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean);
-}
-
-function parseNumber(value: string | undefined): number | null {
-  if (!value || value.trim() === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parseDate(value: string | undefined): Date | null {
-  if (!value || value.trim() === '') return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 /** Parse an IMDb "Your Ratings" CSV export into the unified Film model. */

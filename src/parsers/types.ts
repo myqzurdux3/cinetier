@@ -29,3 +29,17 @@ export function requireColumns(headers: string[], required: string[], hint: stri
     throw new ParseError(`This file is missing the column(s): ${missing.join(', ')}.`, hint);
   }
 }
+
+/** Parse a CSV cell as a number, treating blank and unparseable values as absent. */
+export function parseNumber(value: string | undefined): number | null {
+  if (!value || value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Parse a CSV cell as a date, treating blank and unparseable values as absent. */
+export function parseDate(value: string | undefined): Date | null {
+  if (!value || value.trim() === '') return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
