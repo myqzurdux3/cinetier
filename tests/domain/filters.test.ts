@@ -116,6 +116,21 @@ describe('applyFilters', () => {
     expect(result.map((f) => f.title).sort()).toEqual(['Meh', 'Unrated']);
   });
 
+  it('filters by minimum runtime', () => {
+    const result = applyFilters(library, { minRuntimeMinutes: 100 });
+    expect(result.map((f) => f.title).sort()).toEqual(['Liked', 'Loved']);
+  });
+
+  it('filters by maximum rating', () => {
+    const result = applyFilters(library, { maxRating: 60 });
+    expect(result.map((f) => f.title)).toEqual(['Meh']);
+  });
+
+  it('filters by watch date up to a cutoff', () => {
+    const result = applyFilters(library, { watchedBefore: new Date('2024-01-01') });
+    expect(result.map((f) => f.title)).toEqual(['Meh']);
+  });
+
   it('filters by rewatch status', () => {
     expect(applyFilters(library, { onlyRewatches: true }).map((f) => f.title)).toEqual(['Meh']);
   });
@@ -148,7 +163,8 @@ describe('applyFilters', () => {
 
 describe('availableGenres', () => {
   it('lists every genre present, sorted and deduplicated', () => {
-    expect(availableGenres(library)).toEqual(['Action', 'Comedy', 'Drama', 'Horror']);
+    const withDuplicateGenre = [...library, film({ title: 'Another Drama', genres: ['Drama'] })];
+    expect(availableGenres(withDuplicateGenre)).toEqual(['Action', 'Comedy', 'Drama', 'Horror']);
   });
 });
 
