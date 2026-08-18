@@ -83,4 +83,17 @@ describe('parseLetterboxdExport', () => {
     expect(result.warnings.join(' ')).toMatch(/Too High/);
     expect(result.warnings.join(' ')).toMatch(/Too Low/);
   });
+
+  it('tolerates an out-of-range rating in the ratings pass for a film absent elsewhere', () => {
+    const ratingsOnly =
+      'Date,Name,Year,Letterboxd URI,Rating\n' +
+      '2021-06-01,Good One,2021,https://boxd.it/good1,4\n' +
+      '2021-07-01,Bad Six,2021,https://boxd.it/bad6,6';
+    const result = parseLetterboxdExport({ ratings: ratingsOnly });
+    expect(result.films).toHaveLength(1);
+    expect(result.films.map((f) => f.title)).toEqual(['Good One']);
+    expect(result.films.some((f) => f.id === 'lb:bad6')).toBe(false);
+    expect(result.films.some((f) => f.title === 'Bad Six')).toBe(false);
+    expect(result.warnings.join(' ')).toMatch(/Bad Six/);
+  });
 });
