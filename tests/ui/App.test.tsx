@@ -71,6 +71,48 @@ beforeEach(() => {
 });
 
 describe('App persistence', () => {
+  it('restores the saved library on mount', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a'), film('b')]);
+
+    render(<App />);
+
+    await waitFor(() => expect(loadLibrary).toHaveBeenCalled());
+    expect(
+      await screen.findByRole('button', { name: /import a different export/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/2 films/)).toBeInTheDocument();
+  });
+
+  it('saves the enriched library only after enrichment settles, not before', async () => {
+    const enrichDeferred = deferred<Film[]>();
+    vi.mocked(enrichLibrary).mockReturnValue(enrichDeferred.promise);
+
+    render(<App />);
+    await importFixture();
+
+    await waitFor(() => expect(enrichLibrary).toHaveBeenCalled());
+    expect(saveLibrary).not.toHaveBeenCalled();
+
+    const enriched = [film('enriched')];
+    enrichDeferred.resolve(enriched);
+
+    await waitFor(() => expect(saveLibrary).toHaveBeenCalledWith(enriched));
+  });
+
+  it('clears the stored library on reset and returns to the import screen', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a')]);
+    render(<App />);
+
+    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
+    await userEvent.click(resetButton);
+
+    expect(clearLibrary).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /import a different export/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('does not let a stale restore repopulate the screen after a reset', async () => {
     // The restore promise from mount is still pending when the user imports,
     // waits for enrichment to save, and then resets — exactly the trace in

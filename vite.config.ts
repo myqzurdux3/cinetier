@@ -38,10 +38,6 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/domain/**', 'src/parsers/**', 'src/services/**', 'src/enrich/**', 'src/ui/**'],
-      // App.tsx is the root component wiring screens together; it is exercised
-      // by hand in the browser (see Task 9's Step 6) rather than by unit tests,
-      // so it is named here and excluded rather than lowering the thresholds.
-      exclude: ['src/ui/App.tsx'],
       // The definition of done for the pure layers, enforced by CI rather than
       // by a sentence in a document.
       thresholds: { statements: 90, branches: 85, functions: 90, lines: 90 },
