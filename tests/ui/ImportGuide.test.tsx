@@ -30,8 +30,18 @@ describe('ImportGuide', () => {
     expect(onBack).toHaveBeenCalled();
   });
 
-  it('warns Letterboxd users that export requires a Pro subscription', () => {
+  it('raises a possible Pro requirement as a conditional, never as a flat fact', () => {
+    // Whether Letterboxd gates export behind Pro could not be verified: the
+    // official pages refuse automated fetches and the secondary sources
+    // disagree. Saying it flatly would turn away most users of one of the two
+    // supported services on an unverified premise; saying nothing would leave
+    // them at a paywalled dead end. The conditional is honest either way, so
+    // this pins the conditional itself, not merely a mention of Pro.
     render(<ImportGuide source="letterboxd" onBack={vi.fn()} onImported={vi.fn()} />);
-    expect(screen.getByText(/Letterboxd Pro/i)).toBeInTheDocument();
+    const note = screen.getByText(/Pro subscription/i);
+    expect(note).toHaveTextContent(
+      /if you do not see an export option in your settings, Letterboxd may require a Pro subscription/i,
+    );
+    expect(note).not.toHaveTextContent(/restricts|is restricted|cannot produce|requires a Pro/i);
   });
 });

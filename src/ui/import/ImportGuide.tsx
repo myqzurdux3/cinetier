@@ -48,8 +48,8 @@ export function ImportGuide({ source, onBack, onImported }: ImportGuideProps) {
 
       {source === 'letterboxd' && (
         <p className="rounded border border-line bg-surface p-4 text-sm text-ink-dim">
-          Letterboxd currently restricts data export to Letterboxd Pro subscribers, so a free
-          account cannot produce this file. An IMDb export works on any account, free or paid.
+          If you do not see an export option in your settings, Letterboxd may require a Pro
+          subscription for it. An IMDb export works on any account, free or paid.
         </p>
       )}
 
