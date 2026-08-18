@@ -17,11 +17,12 @@ const BASE = 'https://api.themoviedb.org/3';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
 /**
- * TMDB reports 0 for a film nobody has rated. Passing that to normalizeRating
- * would throw, so an absent rating is represented as absent.
+ * TMDB reports 0 for a film nobody has rated, and can report values below 1
+ * for a film with a few very low votes. normalizeRating accepts 1 to 10 only,
+ * so anything outside that is an absent rating rather than a rating of zero.
  */
 function toPublicRating(voteAverage: number): number | null {
-  if (!Number.isFinite(voteAverage) || voteAverage <= 0 || voteAverage > 10) return null;
+  if (!Number.isFinite(voteAverage) || voteAverage < 1 || voteAverage > 10) return null;
   return normalizeRating(voteAverage, 'imdb10');
 }
 

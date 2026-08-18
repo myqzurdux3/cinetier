@@ -42,6 +42,13 @@ describe('lookupByImdbId', () => {
     expect(match?.publicRating).toBeNull();
   });
 
+  it('treats a vote average below 1 as no public rating rather than throwing', async () => {
+    mockFetch({ movie_results: [{ id: 2, poster_path: null, vote_average: 0.5 }] });
+    const match = await lookupByImdbId('tt0000002');
+    expect(match).not.toBeNull();
+    expect(match?.publicRating).toBeNull();
+  });
+
   it('returns null rather than throwing when TMDB fails', async () => {
     mockFetch({}, false);
     expect(await lookupByImdbId('tt0133093')).toBeNull();
