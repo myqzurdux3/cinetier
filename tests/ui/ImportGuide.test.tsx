@@ -14,6 +14,8 @@ describe('ImportGuide', () => {
     render(<ImportGuide source="letterboxd" onBack={vi.fn()} onImported={vi.fn()} />);
     expect(screen.getByRole('list')).toHaveTextContent(/Settings/i);
     expect(screen.getByRole('list')).toHaveTextContent(/Export your data/i);
+    expect(screen.getByRole('list')).toHaveTextContent(/Import & Export/i);
+    expect(screen.getByRole('list')).not.toHaveTextContent(/Data tab/i);
   });
 
   it('warns IMDb users that their watch dates are really rating dates', () => {
