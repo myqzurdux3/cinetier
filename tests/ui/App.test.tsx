@@ -168,6 +168,15 @@ describe('App persistence', () => {
   });
 });
 
+describe('App shell', () => {
+  it('does not print the same tagline twice on one screen', () => {
+    // The header carries a tagline of its own from `sm` up, so a second copy of
+    // the same sentence in the page body reads as a rendering mistake.
+    render(<App />);
+    expect(screen.getAllByText(/turn your film history into a tier list/i)).toHaveLength(1);
+  });
+});
+
 describe('App enrichment races', () => {
   /**
    * Hands the test control of every enrichLibrary call: the promise it returned

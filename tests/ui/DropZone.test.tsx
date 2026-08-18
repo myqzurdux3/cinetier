@@ -79,6 +79,19 @@ describe('DropZone', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/Letterboxd/);
   });
 
+  it('clears the file input after reading, so the same file can be chosen again', async () => {
+    render(<DropZone onImported={vi.fn()} />);
+    const input: HTMLInputElement = screen.getByLabelText(/choose a file/i);
+
+    await userEvent.upload(input, new File(['a,b\n1,2'], 'random.csv', { type: 'text/csv' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    // A file input holds on to its last selection, and re-choosing that same
+    // file fires no change event at all — so after an error, the retry the user
+    // is most likely to make would leave the page looking dead.
+    expect(input.value).toBe('');
+  });
+
   it('is reachable and operable without a mouse', async () => {
     render(<DropZone onImported={vi.fn()} />);
     const input = screen.getByLabelText(/choose a file/i);

@@ -37,8 +37,10 @@ export function LibrarySummary({ films, warnings, enriching, onReset }: LibraryS
             {warnings.length} row{warnings.length === 1 ? '' : 's'} could not be read
           </summary>
           <ul className="mt-2 space-y-1">
-            {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+            {/* Keyed by position: two untitled rows warn in identical words, and
+                the list is static for as long as it is on screen. */}
+            {warnings.map((warning, index) => (
+              <li key={index}>{warning}</li>
             ))}
           </ul>
         </details>

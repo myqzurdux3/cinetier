@@ -11,8 +11,8 @@ export function Shell({ children }: ShellProps) {
       <header className="flex items-center gap-3 px-6 py-4 border-b border-line">
         <Logo />
         <span className="text-lg font-semibold tracking-tight">Cinetier</span>
-        <span className="ml-auto text-sm text-ink-dim hidden sm:block">
-          Turn your film history into a tier list
+        <span className="ml-auto hidden text-sm text-ink-dim sm:block">
+          Rank what you have already seen
         </span>
       </header>
 

@@ -61,6 +61,27 @@ describe('LibrarySummary', () => {
     expect(screen.getByText(/Skipped a row/)).toBeInTheDocument();
   });
 
+  it('lists two identical warnings as two rows', () => {
+    // Two untitled rows produce byte-identical warnings, so keying the list by
+    // message text gives React duplicate keys for genuinely distinct rows.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const repeated = 'Skipped a row with no title.';
+
+    render(
+      <LibrarySummary
+        films={films}
+        warnings={[repeated, repeated]}
+        enriching={null}
+        onReset={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText(repeated)).toHaveLength(2);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    consoleError.mockRestore();
+  });
+
   it('offers a way to start over', async () => {
     const onReset = vi.fn();
     render(<LibrarySummary films={films} warnings={[]} enriching={null} onReset={onReset} />);

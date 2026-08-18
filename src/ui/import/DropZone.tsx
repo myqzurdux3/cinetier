@@ -41,7 +41,11 @@ export function DropZone({ onImported }: DropZoneProps) {
   }
 
   function onChange(event: ChangeEvent<HTMLInputElement>) {
-    void handle([...(event.target.files ?? [])]);
+    const input = event.target;
+    void handle([...(input.files ?? [])]);
+    // A file input keeps its selection, and re-choosing the same file fires no
+    // change event — which is exactly the retry someone makes after an error.
+    input.value = '';
   }
 
   return (
