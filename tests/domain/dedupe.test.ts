@@ -83,4 +83,20 @@ describe('mergeLibraries', () => {
     expect(merged!.runtimeMinutes).toBe(132);
     expect(merged!.rating).toBe(100);
   });
+
+  it('merges across services when only IMDb export has the identifier', () => {
+    const imdb = [film({ title: 'The Matrix', year: 1999, imdbId: 'tt0133093', rating: 90 })];
+    const letterboxd = [
+      film({ title: 'The Matrix', year: 1999, source: 'letterboxd', imdbId: null }),
+    ];
+    expect(mergeLibraries(imdb, letterboxd)).toHaveLength(1);
+  });
+
+  it('keeps remakes separate even when only one has an IMDb identifier', () => {
+    const merged = mergeLibraries(
+      [film({ title: 'Dune', year: 1984, imdbId: 'tt0087182' })],
+      [film({ title: 'Dune', year: 2021, source: 'letterboxd', imdbId: null })],
+    );
+    expect(merged).toHaveLength(2);
+  });
 });
