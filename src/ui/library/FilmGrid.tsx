@@ -48,7 +48,7 @@ export function FilmGrid({ films, columns = 8, generation = 0 }: FilmGridProps) 
               <div
                 key={film.id}
                 data-entering={entering ? 'true' : 'false'}
-                className="motion-safe:transition-all motion-safe:duration-500 data-[entering=true]:translate-y-2 data-[entering=true]:opacity-0"
+                className="motion-safe:transition-all motion-safe:duration-500 motion-safe:data-[entering=true]:translate-y-2 motion-safe:data-[entering=true]:opacity-0"
                 style={{ transitionDelay: `${Math.min(index * 25, 200)}ms` }}
               >
                 <FilmCard film={film} />

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { FilmGrid } from '@/ui/library/FilmGrid';
 import type { Film } from '@/domain/film';
 
@@ -82,5 +82,51 @@ describe('FilmGrid', () => {
 
     rerender(<FilmGrid films={films} generation={2} />);
     expect(container.querySelectorAll('[data-entering="true"]').length).toBeGreaterThan(0);
+  });
+
+  it('gates every entrance-state class behind motion-safe, not just the transition itself', () => {
+    // Under prefers-reduced-motion the entrance must not run at all, not just
+    // run without easing. That only holds if every class that moves or hides
+    // a card while it is entering — not merely the transition/duration
+    // classes — is itself conditioned on motion-safe. jsdom does not evaluate
+    // media queries, so this asserts on the class names directly: any class
+    // targeting data-[entering=true] must carry the motion-safe: prefix, or
+    // reduced-motion readers get an unanimated flash instead of no entrance.
+    const films = [film('a')];
+    const { container } = render(<FilmGrid films={films} generation={1} />);
+    const entering = container.querySelector('[data-entering="true"]');
+    expect(entering).not.toBeNull();
+
+    const classes = entering!.className.split(/\s+/).filter(Boolean);
+    const stateClasses = classes.filter((c) => c.includes('data-[entering=true]'));
+    expect(stateClasses.length).toBeGreaterThan(0);
+    for (const className of stateClasses) {
+      expect(className.startsWith('motion-safe:')).toBe(true);
+    }
+  });
+
+  it('does not animate rows that enter the virtual window later via scroll', async () => {
+    // The entrance flag is shared by the whole grid, not owned per row: a row
+    // that mounts later, once the reader has scrolled past the initial
+    // viewport, must see it already cleared. Otherwise a long library
+    // flickers for as long as the reader keeps scrolling.
+    const films = Array.from({ length: 400 }, (_, i) => film(`f${i}`));
+    const { container } = render(<FilmGrid films={films} columns={8} generation={1} />);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('[data-entering="true"]').length).toBe(0);
+    });
+
+    const scroller = container.querySelector('.overflow-y-auto');
+    expect(scroller).not.toBeNull();
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      writable: true,
+      value: 20000,
+    });
+    fireEvent.scroll(scroller!);
+
+    expect(container.querySelectorAll('[data-entering="false"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-entering="true"]').length).toBe(0);
   });
 });
