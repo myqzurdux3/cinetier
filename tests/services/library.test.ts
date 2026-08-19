@@ -35,6 +35,13 @@ describe('library persistence', () => {
     expect(await loadLibrary()).toBeNull();
   });
 
+  it('reports nothing when the saved library is empty', async () => {
+    // A version before series were importable could save an empty library, and
+    // restoring one puts the user back on a blank library screen every visit.
+    await saveLibrary([]);
+    expect(await loadLibrary()).toBeNull();
+  });
+
   it('round-trips a library', async () => {
     await saveLibrary([film('a'), film('b')]);
     const restored = await loadLibrary();
