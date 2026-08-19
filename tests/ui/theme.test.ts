@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { loadTheme, saveTheme, applyTheme, DEFAULT_THEME } from '@/services/theme';
+import { readFileSync } from 'node:fs';
+import { loadTheme, saveTheme, applyTheme, DEFAULT_THEME, THEMES } from '@/services/theme';
 
 beforeEach(() => {
   localStorage.clear();
@@ -54,5 +55,25 @@ describe('applyTheme', () => {
     applyTheme('neon');
     applyTheme('cinema');
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+  });
+});
+
+describe('the inline no-flash script', () => {
+  // index.html cannot import the service — a module request before first
+  // paint is the very delay the inline script exists to avoid — so the
+  // storage key and theme name are duplicated there on purpose. This is what
+  // keeps that copy honest: it fails if either side is renamed.
+  const html = readFileSync('index.html', 'utf8');
+
+  it('reads the same storage key the service writes', () => {
+    saveTheme('neon');
+    const key = Object.keys(localStorage).find((k) => localStorage.getItem(k) === 'neon')!;
+    expect(html).toContain(key);
+  });
+
+  it('applies every theme that is not the default', () => {
+    for (const theme of THEMES.filter((t) => t !== DEFAULT_THEME)) {
+      expect(html).toContain(theme);
+    }
   });
 });
