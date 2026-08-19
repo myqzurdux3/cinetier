@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Shell } from './Shell';
-import { SourcePicker, type ImportSource } from './import/SourcePicker';
+import { Landing } from './Landing';
+import type { ImportSource } from './import/SourcePicker';
 import { ImportGuide } from './import/ImportGuide';
 import { FilmGrid } from './library/FilmGrid';
 import { LibrarySummary } from './library/LibrarySummary';
@@ -100,16 +101,10 @@ export default function App() {
 
   return (
     <Shell>
-      <div className="mx-auto max-w-2xl px-6 py-16">
-        {source === null ? (
-          <>
-            <h1 className="mb-3 text-center text-3xl font-semibold tracking-tight">
-              Turn your film history into a tier list
-            </h1>
-            <p className="mb-10 text-center text-ink-dim">Where do you keep your films?</p>
-            <SourcePicker onPick={setSource} />
-          </>
-        ) : (
+      {source === null ? (
+        <Landing onPick={setSource} />
+      ) : (
+        <div className="mx-auto max-w-2xl px-6 py-16">
           <ImportGuide
             source={source}
             onBack={() => setSource(null)}
@@ -122,8 +117,8 @@ export default function App() {
               });
             }}
           />
-        )}
-      </div>
+        </div>
+      )}
     </Shell>
   );
 }

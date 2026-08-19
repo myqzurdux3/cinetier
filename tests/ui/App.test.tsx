@@ -170,11 +170,13 @@ describe('App persistence', () => {
 });
 
 describe('App shell', () => {
-  it('does not print the same tagline twice on one screen', () => {
-    // The header carries a tagline of its own from `sm` up, so a second copy of
-    // the same sentence in the page body reads as a rendering mistake.
+  it('does not print the header tagline a second time on the landing screen', () => {
+    // The header carries a tagline of its own from `sm` up. The landing screen
+    // makes its own, differently worded, case for the product below the fold —
+    // a literal second copy of the header's sentence would read as a rendering
+    // mistake.
     render(<App />);
-    expect(screen.getAllByText(/turn your film history into a tier list/i)).toHaveLength(1);
+    expect(screen.getAllByText(/rank what you have already seen/i)).toHaveLength(1);
   });
 });
 
