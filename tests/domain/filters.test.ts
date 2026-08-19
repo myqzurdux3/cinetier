@@ -273,7 +273,12 @@ describe('activeCriteria', () => {
 describe('withoutCriterion', () => {
   it('removes exactly the named criterion', () => {
     const criteria: FilterCriteria = { minRating: 80, genres: ['Drama'], topN: 10 };
-    expect(withoutCriterion(criteria, 'genres')).toEqual({ minRating: 80, topN: 10 });
+    const result = withoutCriterion(criteria, 'genres');
+    expect(result).toEqual({ minRating: 80, topN: 10 });
+    // toEqual treats an undefined-valued property as equivalent to an absent
+    // one, so it would not catch `next[key] = undefined` in place of `delete
+    // next[key]`. This checks the key is truly gone, not just undefined.
+    expect(Object.hasOwn(result, 'genres')).toBe(false);
   });
 
   it('leaves the original untouched', () => {
@@ -290,7 +295,24 @@ describe('subsetCriteria', () => {
       maxRating: undefined,
       genres: ['Drama'],
     };
-    expect(subsetCriteria(criteria, ['minRating', 'maxRating'])).toEqual({ minRating: 80 });
+    const result = subsetCriteria(criteria, ['minRating', 'maxRating']);
+    expect(result).toEqual({ minRating: 80 });
+    // toEqual treats an undefined-valued property as equivalent to an absent
+    // one, so it alone would not catch an implementation that copied
+    // maxRating: undefined across unconditionally. Assert the key is truly
+    // absent, not merely undefined.
+    expect(Object.hasOwn(result, 'maxRating')).toBe(false);
+  });
+
+  it('excludes an inactive key even when its value is falsy but not undefined', () => {
+    // false and [] are real, present values that toEqual would not equate to
+    // absence — unlike the maxRating: undefined case above, an implementation
+    // that dropped the isCriterionActive guard would fail this one directly.
+    const criteria: FilterCriteria = { onlyUnrated: false, genres: [], minRating: 80 };
+    const result = subsetCriteria(criteria, ['onlyUnrated', 'genres', 'minRating']);
+    expect(result).toEqual({ minRating: 80 });
+    expect(Object.hasOwn(result, 'onlyUnrated')).toBe(false);
+    expect(Object.hasOwn(result, 'genres')).toBe(false);
   });
 });
 

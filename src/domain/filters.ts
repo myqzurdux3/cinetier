@@ -142,9 +142,10 @@ export function runtimeBounds(films: Film[]): { min: number; max: number } | nul
 export type CriterionKey = keyof FilterCriteria;
 
 /**
- * Every criterion, in the order the interface talks about them. Chips follow
- * it, and mostRestrictiveCriterion breaks ties with it, so two libraries in the
- * same state always produce the same words in the same order.
+ * Every criterion, in a deliberately curated presentation order (not
+ * FilterCriteria's declaration order). Chips follow it, and
+ * mostRestrictiveCriterion breaks ties with it, so two libraries in the same
+ * state always produce the same words in the same order.
  */
 const CRITERION_ORDER: readonly CriterionKey[] = [
   'titleTypes',
