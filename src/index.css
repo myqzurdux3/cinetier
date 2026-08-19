@@ -1,4 +1,15 @@
-@import 'tailwindcss';
+/*
+  Tailwind's automatic source detection walks the whole project looking for
+  class names, and it does not know the difference between application code
+  and planning prose: a class name mentioned in a doc under docs/ (e.g. a
+  plan's example markup) got compiled into the production stylesheet even
+  though nothing in the app renders it. source(none) turns that heuristic
+  off; the two @source lines below say exactly what should be scanned.
+*/
+@import 'tailwindcss' source(none);
+
+@source './**/*.{ts,tsx}';
+@source '../index.html';
 
 /*
   Salle obscure is the default theme, so its values live on :root rather than
