@@ -90,6 +90,18 @@ export default tseslint.config(
           message:
             'Colours come from theme tokens, never literals — add a token in src/index.css.',
         },
+        {
+          // The Literal selector above only matches string/number literals —
+          // it never sees inside a template literal (`#00ff00`), whose text
+          // lives on TemplateElement nodes instead. Without this second
+          // selector a colour hidden in an interpolated string, like
+          // Landing.tsx's own `var(--color-${tier.token})` pattern but with a
+          // hex value spliced in instead of a token, sails straight through.
+          selector:
+            "TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b|\\brgba?\\(|\\bhsla?\\(/]",
+          message:
+            'Colours come from theme tokens, never literals — add a token in src/index.css.',
+        },
       ],
     },
   },
