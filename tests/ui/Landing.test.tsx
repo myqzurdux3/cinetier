@@ -14,8 +14,15 @@ describe('Landing', () => {
     render(<Landing onPick={vi.fn()} />);
     // Colour alone never identifies a tier: a reader who cannot separate the
     // hues still has to be able to read the board this product exists to make.
-    for (const letter of ['S', 'A', 'B', 'C', 'D', 'F']) {
-      expect(screen.getByText(letter)).toBeInTheDocument();
+    // It is not enough for the letters to appear somewhere on the page — each
+    // one has to sit inside the coloured band itself, in tier order, riding on
+    // an element that actually carries a tier colour.
+    const band = screen.getByTestId('tier-band');
+    const bands = Array.from(band.children);
+    expect(bands).toHaveLength(6);
+    expect(bands.map((el) => el.textContent)).toEqual(['S', 'A', 'B', 'C', 'D', 'F']);
+    for (const el of bands) {
+      expect((el as HTMLElement).style.backgroundColor).toMatch(/^var\(--color-tier-[a-z]\)$/);
     }
   });
 

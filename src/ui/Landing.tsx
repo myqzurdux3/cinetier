@@ -28,7 +28,7 @@ export function Landing({ onPick }: LandingProps) {
 
       {/* The product's signature, and the plainest possible statement of what it
           makes. The letter rides on every band: colour alone never names a tier. */}
-      <div className="flex overflow-hidden rounded-card">
+      <div data-testid="tier-band" className="flex overflow-hidden rounded-card">
         {TIERS.map((tier) => (
           <div
             key={tier.letter}
