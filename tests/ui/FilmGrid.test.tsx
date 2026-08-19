@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { FilmGrid } from '@/ui/library/FilmGrid';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { FilmGrid, deriveColumnCount } from '@/ui/library/FilmGrid';
 import type { Film } from '@/domain/film';
 
 function film(id: string): Film {
@@ -128,5 +128,69 @@ describe('FilmGrid', () => {
 
     expect(container.querySelectorAll('[data-entering="false"]').length).toBeGreaterThan(0);
     expect(container.querySelectorAll('[data-entering="true"]').length).toBe(0);
+  });
+
+  it('measures the container and responds to its width via ResizeObserver, when the API exists', () => {
+    // jsdom does not implement ResizeObserver, so the real browser behaviour
+    // can only be exercised by supplying a fake and driving its callback by
+    // hand. This still proves the component actually wires the observer up
+    // to setState, rather than only trusting the arithmetic tested below.
+    let observedCallback: ResizeObserverCallback | null = null;
+    let observedElement: Element | null = null;
+    class FakeResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        observedCallback = callback;
+      }
+      observe(el: Element) {
+        observedElement = el;
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    const films = Array.from({ length: 20 }, (_, i) => film(`f${i}`));
+    const { container } = render(<FilmGrid films={films} generation={1} />);
+
+    // No columns prop: the grid starts at the desktop default (8) …
+    const row = () => container.querySelector('[style*="grid-template-columns"]') as HTMLElement;
+    expect(row().style.gridTemplateColumns).toBe('repeat(8, minmax(0, 1fr))');
+
+    // … then narrows once the observer reports a phone-sized container.
+    expect(observedElement).not.toBeNull();
+    act(() => {
+      observedCallback!(
+        [{ contentRect: { width: 390 } } as ResizeObserverEntry],
+        {} as ResizeObserver,
+      );
+    });
+
+    expect(row().style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('deriveColumnCount', () => {
+  it('gives a phone-width container two or three columns, not eight', () => {
+    expect(deriveColumnCount(390)).toBe(2);
+    expect(deriveColumnCount(480)).toBe(3);
+  });
+
+  it('gives a desktop-width container the full eight columns', () => {
+    expect(deriveColumnCount(1200)).toBe(8);
+    expect(deriveColumnCount(5000)).toBe(8);
+  });
+
+  it('never drops below two columns even at zero width', () => {
+    expect(deriveColumnCount(0)).toBe(2);
+    expect(deriveColumnCount(100)).toBe(2);
+  });
+
+  it('scales roughly one column per 150px in between', () => {
+    expect(deriveColumnCount(600)).toBe(4);
+    expect(deriveColumnCount(750)).toBe(5);
   });
 });
