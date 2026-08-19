@@ -32,7 +32,7 @@ export function Landing({ onPick }: LandingProps) {
         {TIERS.map((tier) => (
           <div
             key={tier.letter}
-            className="flex-1 py-2 text-center font-display text-sm tracking-widest text-on-accent"
+            className="flex-1 py-2 text-center font-display text-xl font-bold tracking-widest text-on-accent"
             style={{ backgroundColor: `var(--color-${tier.token})` }}
           >
             {tier.letter}

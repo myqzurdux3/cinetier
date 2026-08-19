@@ -18,12 +18,23 @@ describe('Landing', () => {
     // one has to sit inside the coloured band itself, in tier order, riding on
     // an element that actually carries a tier colour.
     const band = screen.getByTestId('tier-band');
-    const bands = Array.from(band.children);
+    const bands = Array.from(band.children) as HTMLElement[];
     expect(bands).toHaveLength(6);
     expect(bands.map((el) => el.textContent)).toEqual(['S', 'A', 'B', 'C', 'D', 'F']);
     for (const el of bands) {
-      expect((el as HTMLElement).style.backgroundColor).toMatch(/^var\(--color-tier-[a-z]\)$/);
+      expect(el.style.backgroundColor).toMatch(/^var\(--color-tier-[a-z]\)$/);
     }
+
+    // Pin each letter to its own colour, not just "some tier colour" per
+    // element — a mismatched pairing (e.g. S riding on tier-a) would pass the
+    // loop above but fails here.
+    const byLetter = Object.fromEntries(bands.map((el) => [el.textContent, el]));
+    expect(byLetter['S']!.style.backgroundColor).toBe('var(--color-tier-s)');
+    expect(byLetter['A']!.style.backgroundColor).toBe('var(--color-tier-a)');
+    expect(byLetter['B']!.style.backgroundColor).toBe('var(--color-tier-b)');
+    expect(byLetter['C']!.style.backgroundColor).toBe('var(--color-tier-c)');
+    expect(byLetter['D']!.style.backgroundColor).toBe('var(--color-tier-d)');
+    expect(byLetter['F']!.style.backgroundColor).toBe('var(--color-tier-f)');
   });
 
   it('promotes the privacy promise out of the fine print', () => {

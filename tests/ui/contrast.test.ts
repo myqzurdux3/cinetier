@@ -86,7 +86,11 @@ describe.each(Object.entries(THEMES))('contrast in %s', (_name, t) => {
 
   it('keeps every tier band readable under its letter', () => {
     // The letter is what identifies a tier when the colours cannot be told
-    // apart, so it has to be legible on all six.
+    // apart, so it has to be legible on all six. 3:1 rather than 4.5:1 is the
+    // correct threshold here, not a relaxed one: Landing.tsx renders these
+    // letters at text-xl font-bold (20px/700), which clears WCAG's large-text
+    // definition (>=18.66px bold), so the large-text ratio is the one that
+    // actually applies to this render path.
     const combos: Combo[] = ['s', 'a', 'b', 'c', 'd', 'f'].map((tier) => [
       `on-accent on tier-${tier}`,
       t['--color-on-accent']!,
