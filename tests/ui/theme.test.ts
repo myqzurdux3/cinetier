@@ -1,0 +1,58 @@
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { loadTheme, saveTheme, applyTheme, DEFAULT_THEME } from '@/services/theme';
+
+beforeEach(() => {
+  localStorage.clear();
+  document.documentElement.removeAttribute('data-theme');
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('theme persistence', () => {
+  it('falls back to the default theme when nothing was ever chosen', () => {
+    expect(loadTheme()).toBe(DEFAULT_THEME);
+  });
+
+  it('round-trips a chosen theme', () => {
+    saveTheme('neon');
+    expect(loadTheme()).toBe('neon');
+  });
+
+  it('ignores a stored value that is not a theme', () => {
+    // A hand-edited or stale key must not put the app in an unstyled state.
+    localStorage.setItem('cinetier:theme', 'midnight-hacker');
+    expect(loadTheme()).toBe(DEFAULT_THEME);
+  });
+
+  it('falls back instead of throwing when storage is unavailable', () => {
+    // Private browsing and blocked-storage settings make these throw, and a
+    // throw here happens before the first paint — the whole page would be lost.
+    vi.stubGlobal('localStorage', {
+      getItem() {
+        throw new Error('denied');
+      },
+      setItem() {
+        throw new Error('denied');
+      },
+    });
+    expect(loadTheme()).toBe(DEFAULT_THEME);
+    expect(() => saveTheme('neon')).not.toThrow();
+  });
+});
+
+describe('applyTheme', () => {
+  it('marks the document so the neon tokens take effect', () => {
+    applyTheme('neon');
+    expect(document.documentElement.dataset.theme).toBe('neon');
+  });
+
+  it('removes the marker for the default theme rather than naming it', () => {
+    // The default theme lives on :root with no selector, so the attribute must
+    // come off — leaving data-theme="cinema" would work only by accident.
+    applyTheme('neon');
+    applyTheme('cinema');
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+  });
+});

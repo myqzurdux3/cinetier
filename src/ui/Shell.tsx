@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Logo } from './Logo';
+import { ThemeToggle } from './theme/ThemeToggle';
 
 interface ShellProps {
   children: ReactNode;
@@ -10,10 +11,11 @@ export function Shell({ children }: ShellProps) {
     <div className="min-h-screen bg-screen text-ink flex flex-col">
       <header className="flex items-center gap-3 px-6 py-4 border-b border-line">
         <Logo />
-        <span className="text-lg font-semibold tracking-tight">Cinetier</span>
+        <span className="font-display text-lg tracking-wide uppercase">Cinetier</span>
         <span className="ml-auto hidden text-sm text-ink-dim sm:block">
           Rank what you have already seen
         </span>
+        <ThemeToggle />
       </header>
 
       <main className="flex-1">{children}</main>

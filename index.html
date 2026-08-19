@@ -28,6 +28,18 @@
     />
   </head>
   <body>
+    <script>
+      // Applied before the first paint. React mounts too late: a visitor on the
+      // neon theme would see the default one for a frame on every single visit.
+      // Inlined rather than imported for the same reason — a module request is a
+      // round trip. Kept in step with src/services/theme.ts by tests/ui/theme.test.ts.
+      try {
+        var t = localStorage.getItem('cinetier:theme');
+        if (t === 'neon') document.documentElement.dataset.theme = t;
+      } catch (e) {
+        /* storage blocked; the default theme is already correct */
+      }
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
