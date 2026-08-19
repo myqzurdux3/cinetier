@@ -76,8 +76,10 @@ title plus year, and this is the stated cost of that rule.
   of that size. Batching progress — every N films, or on an animation frame — is the cheap
   fix.
 - ~~**The grid is fixed at six columns** regardless of viewport, so a phone renders six very
-  small posters per row.~~ Superseded: the grid now defaults to 8 columns (see the
-  visual-identity entry further down), and a responsive column count is still not scoped.
+  small posters per row.~~ Superseded, then closed: the grid briefly defaulted to a fixed 8
+  columns under the visual-identity plan, and the whole-branch review fix pass (2026-08-19)
+  made the column count responsive to the container's measured width instead (see the
+  visual-identity entry further down).
 - **zip.js cannot be code-split.** It is eagerly imported by a `parsers/` module, and the
   layer rule forbids dynamic `import()` there, so every IMDb-only visitor downloads it.
 
@@ -139,14 +141,17 @@ themed landing screen and library grid.
 
 That plan deferred three things of its own:
 
-- **The grid's column count is fixed at 8** rather than responsive to the
-  container. A breakpoint-aware column count needs a measured container,
-  which is a change to how the virtualizer is sized; worth doing once the
-  tier board settles the page's layout. This supersedes the older entry
-  above about six columns, which predates the grid's current default.
-- **Neon's `--shadow-glow` token is defined but consumed only by the theme
-  toggle and the service cards.** The tier board is where it will earn its
-  place more broadly.
+- ~~**The grid's column count is fixed at 8** rather than responsive to the
+  container.~~ Closed by the whole-branch review fix pass (2026-08-19): the
+  grid now measures its scroll container with a `ResizeObserver` and derives
+  the column count as `Math.max(2, Math.floor(width / 150))`, capped at 8 —
+  a phone gets two or three columns instead of eight cramped ones, a desktop
+  still gets eight. The `columns` prop still exists as an explicit override
+  for callers (and tests) that want a fixed count. This supersedes the older
+  entry above about six columns, which predates the grid's current default.
+- **Neon's `--shadow-glow` token is consumed by the theme toggle and the
+  service cards.** The tier board is where it will earn its place more
+  broadly.
 - **The mark's geometry test parses path data with a regex** that only
   holds for the current hand-written path style. A future redraw of the
   logo, or one produced by a design tool that emits different path
