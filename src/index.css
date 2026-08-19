@@ -73,6 +73,16 @@
   --vignette: radial-gradient(120% 60% at 50% 0%, rgb(34 229 255 / 0.1), transparent 70%);
 }
 
+/*
+  Readers who ask for reduced transparency are asking not to have content sat
+  under a wash. Hiding the layer is the honest response; dimming it is not.
+*/
+@media (prefers-reduced-transparency: reduce) {
+  [data-texture] {
+    display: none;
+  }
+}
+
 body {
   font-family: var(--font-text);
 }
