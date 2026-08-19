@@ -37,6 +37,23 @@ describe('Landing', () => {
     expect(byLetter['F']!.style.backgroundColor).toBe('var(--color-tier-f)');
   });
 
+  it('renders the tier letters large and bold, not body text', () => {
+    // tests/ui/contrast.test.ts checks on-accent-on-tier-f against the 3:1
+    // large-text threshold, not 4.5:1 — legitimate only because these
+    // letters render at text-xl font-bold (20px/700), which clears WCAG's
+    // large-text definition. If this ever reverted to something body-sized
+    // (e.g. text-sm), the contrast test would keep passing on a threshold
+    // that no longer applies to what's on screen, and on-accent on tier-f
+    // (3.70:1 default theme, 4.35:1 neon) would fail real AA. This pins the
+    // render so that drift shows up here instead of staying invisible.
+    render(<Landing onPick={vi.fn()} />);
+    const band = screen.getByTestId('tier-band');
+    for (const el of Array.from(band.children) as HTMLElement[]) {
+      expect(el).toHaveClass('text-xl');
+      expect(el).toHaveClass('font-bold');
+    }
+  });
+
   it('promotes the privacy promise out of the fine print', () => {
     render(<Landing onPick={vi.fn()} />);
     expect(screen.getByText(/never leave your browser/i)).toBeInTheDocument();

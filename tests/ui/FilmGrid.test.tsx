@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { FilmGrid, deriveColumnCount } from '@/ui/library/FilmGrid';
+import { FilmGrid, deriveColumnCount, deriveRowPitch } from '@/ui/library/FilmGrid';
 import type { Film } from '@/domain/film';
 
 function film(id: string): Film {
@@ -192,5 +192,55 @@ describe('deriveColumnCount', () => {
   it('scales roughly one column per 150px in between', () => {
     expect(deriveColumnCount(600)).toBe(4);
     expect(deriveColumnCount(750)).toBe(5);
+  });
+});
+
+describe('deriveRowPitch', () => {
+  // FilmCard is aspect-[2/3] (width:height = 2:3, so height = width * 1.5)
+  // and the row's gap-2 is 0.5rem = 8px at the app's (unoverridden) default
+  // 16px root font size. Written independently of the implementation, as a
+  // real cross-check rather than re-asserting the same formula against
+  // itself.
+  const GAP = 8;
+  const cardHeightFor = (width: number, columns: number) => {
+    const columnWidth = Math.max(width - GAP * (columns - 1), 0) / columns;
+    return columnWidth * 1.5;
+  };
+
+  it('is always at least the card height that width and column count imply', () => {
+    // This is the property a wrong pitch violates: the virtualizer positions
+    // rows exactly `pitch` apart, so a pitch shorter than the card it has to
+    // hold makes consecutive rows overlap.
+    const cases: Array<[width: number, columns: number]> = [
+      [390, 2],
+      [449, 2],
+      [600, 4],
+      [1200, 8],
+      [5000, 8],
+      [0, 2],
+    ];
+    for (const [width, columns] of cases) {
+      expect(deriveRowPitch(width, columns)).toBeGreaterThanOrEqual(cardHeightFor(width, columns));
+    }
+  });
+
+  it('matches the exact pitch a narrow phone-width container produces', () => {
+    // 390px / 2 columns: the case the review found overlapping under the old
+    // fixed 214px row height (cards came out ~286px tall).
+    expect(deriveRowPitch(390, 2)).toBeCloseTo(294.5);
+  });
+
+  it('matches the exact pitch just below the next column-count threshold', () => {
+    // 449px still gets 2 columns (450px would get 3): the worst case the
+    // review named, where columns are widest for their count.
+    expect(deriveRowPitch(449, 2)).toBeCloseTo(338.75);
+  });
+
+  it("matches the exact pitch at the grid's default desktop width", () => {
+    expect(deriveRowPitch(1200, 8)).toBeCloseTo(222.5);
+  });
+
+  it('never returns a negative or NaN pitch for a zero-width container', () => {
+    expect(deriveRowPitch(0, 2)).toBe(8);
   });
 });
