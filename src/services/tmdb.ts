@@ -50,11 +50,21 @@ function key(): string {
   return import.meta.env.VITE_TMDB_API_KEY;
 }
 
-/** Resolve a film by its IMDb identifier — the reliable path, when we have one. */
+/**
+ * Resolve a title by its IMDb identifier — the reliable path, when we have one.
+ *
+ * TMDB files films and television separately, so /find answers in two different
+ * buckets. A series carries the poster and public score a film does, under the
+ * same field names, so both are read: checking only movie_results would leave
+ * every imported series with no artwork at all.
+ */
 export async function lookupByImdbId(imdbId: string): Promise<TmdbMatch | null> {
   const payload = await getJson(`${BASE}/find/${imdbId}?api_key=${key()}&external_source=imdb_id`);
-  const results = (payload as { movie_results?: TmdbMovieSummary[] } | null)?.movie_results;
-  const first = results?.[0];
+  const found = payload as {
+    movie_results?: TmdbMovieSummary[];
+    tv_results?: TmdbMovieSummary[];
+  } | null;
+  const first = found?.movie_results?.[0] ?? found?.tv_results?.[0];
   return first ? toMatch(first, imdbId) : null;
 }
 

@@ -1,5 +1,6 @@
 import type { Film, FilmSource } from './film';
 import { titleYearKey } from './normalize';
+import { mergeTitleTypes } from './titleType';
 
 /**
  * Combine one record of the same film from two services.
@@ -16,6 +17,7 @@ function mergeFilm(base: Film, incoming: Film): Film {
     imdbId: base.imdbId ?? incoming.imdbId,
     tmdbId: base.tmdbId ?? incoming.tmdbId,
     year: base.year ?? incoming.year,
+    titleType: mergeTitleTypes(base.titleType, incoming.titleType),
     rating: base.rating ?? incoming.rating,
     ratingScale: base.rating !== null ? base.ratingScale : incoming.ratingScale,
     watchedAt: incomingHasBetterDate ? incoming.watchedAt : base.watchedAt,

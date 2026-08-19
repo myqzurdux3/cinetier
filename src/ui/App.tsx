@@ -13,6 +13,7 @@ export default function App() {
   const [source, setSource] = useState<ImportSource | null>(null);
   const [films, setFilms] = useState<Film[] | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [skipped, setSkipped] = useState(0);
   const [enriching, setEnriching] = useState<{ done: number; total: number } | null>(null);
 
   // Restore whatever was saved last time. `restoreCancelled` is set the moment
@@ -52,6 +53,7 @@ export default function App() {
     const id = ++runId.current;
     setFilms(outcome.films);
     setWarnings(outcome.warnings);
+    setSkipped(outcome.skipped);
     setEnriching({ done: 0, total: outcome.films.length });
 
     const enriched = await enrichLibrary(outcome.films, (progress) => {
@@ -74,6 +76,7 @@ export default function App() {
     });
     setFilms(null);
     setWarnings([]);
+    setSkipped(0);
     setEnriching(null);
     setSource(null);
   }
@@ -82,7 +85,13 @@ export default function App() {
     return (
       <Shell>
         <div className="mx-auto max-w-6xl space-y-4 px-6 py-8">
-          <LibrarySummary films={films} warnings={warnings} enriching={enriching} onReset={reset} />
+          <LibrarySummary
+            films={films}
+            warnings={warnings}
+            skipped={skipped}
+            enriching={enriching}
+            onReset={reset}
+          />
           <FilmGrid films={films} />
         </div>
       </Shell>

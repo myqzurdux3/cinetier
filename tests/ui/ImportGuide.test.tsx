@@ -7,7 +7,14 @@ describe('ImportGuide', () => {
   it('gives IMDb-specific instructions naming the file to expect', () => {
     render(<ImportGuide source="imdb" onBack={vi.fn()} onImported={vi.fn()} />);
     expect(screen.getByRole('list')).toHaveTextContent(/Your Ratings/i);
-    expect(screen.getByRole('list')).toHaveTextContent(/ratings\.csv/i);
+    expect(screen.getByRole('list')).toHaveTextContent(/\.csv/i);
+  });
+
+  it('does not promise a file named ratings.csv, which IMDb no longer sends', () => {
+    // The export arrives named after a random identifier; naming ratings.csv
+    // sends people hunting for a file that is not in their downloads.
+    render(<ImportGuide source="imdb" onBack={vi.fn()} onImported={vi.fn()} />);
+    expect(screen.getByRole('list')).not.toHaveTextContent(/ratings\.csv/i);
   });
 
   it('gives Letterboxd-specific instructions naming where the export lives', () => {

@@ -58,6 +58,8 @@ function blankFilm(slug: string, row: Record<string, string>): Film {
     tmdbId: null,
     title: (row['Name'] ?? '').trim(),
     year: parseNumber(row['Year']),
+    // Letterboxd catalogues films only, so there is nothing to classify here.
+    titleType: 'movie',
     rating: null,
     ratingScale: 'letterboxd5',
     watchedAt: null,

@@ -10,9 +10,11 @@ interface ImportGuideProps {
 
 const STEPS: Record<ImportSource, string[]> = {
   imdb: [
-    'Sign in to IMDb and open Your Ratings.',
+    'Sign in to IMDb and open Your Ratings — or any list of yours.',
     'Open the ⋯ menu at the top of the list and choose Export.',
-    'You will be sent a ratings.csv file — drop it below.',
+    // The export arrives named after a random identifier rather than
+    // ratings.csv, which sends people looking for a file they will not find.
+    'IMDb emails you a .csv, often named as a long code. Drop it below as it is.',
   ],
   letterboxd: [
     'Sign in to Letterboxd and open Settings from your username menu.',

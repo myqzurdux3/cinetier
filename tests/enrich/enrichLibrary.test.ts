@@ -24,6 +24,7 @@ function film(overrides: Partial<Film> & Pick<Film, 'id' | 'title'>): Film {
     imdbId: null,
     tmdbId: null,
     year: 1999,
+    titleType: 'movie',
     rating: null,
     ratingScale: 'imdb10',
     watchedAt: null,

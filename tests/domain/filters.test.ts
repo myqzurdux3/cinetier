@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { applyFilters, availableGenres, availableDirectors } from '@/domain/filters';
+import {
+  applyFilters,
+  availableGenres,
+  availableDirectors,
+  availableTitleTypes,
+} from '@/domain/filters';
 import type { Film } from '@/domain/film';
 
 function film(overrides: Partial<Film> & Pick<Film, 'title'>): Film {
@@ -8,6 +13,7 @@ function film(overrides: Partial<Film> & Pick<Film, 'title'>): Film {
     imdbId: null,
     tmdbId: null,
     year: 1999,
+    titleType: 'movie',
     rating: 70,
     ratingScale: 'imdb10',
     watchedAt: new Date('2024-06-15'),
@@ -171,5 +177,33 @@ describe('availableGenres', () => {
 describe('availableDirectors', () => {
   it('lists every director present, sorted and deduplicated', () => {
     expect(availableDirectors(library)).toEqual(['Bong Joon-ho', 'Christopher Nolan']);
+  });
+});
+
+describe('filtering by title type', () => {
+  const library = [
+    film({ title: 'Heat', titleType: 'movie', rating: 90 }),
+    film({ title: 'Fargo', titleType: 'series', rating: 85 }),
+    film({ title: 'Chernobyl', titleType: 'miniSeries', rating: 95 }),
+  ];
+
+  it('keeps only the requested kinds of title', () => {
+    expect(applyFilters(library, { titleTypes: ['movie'] }).map((f) => f.title)).toEqual(['Heat']);
+    expect(
+      applyFilters(library, { titleTypes: ['series', 'miniSeries'] }).map((f) => f.title),
+    ).toEqual(['Fargo', 'Chernobyl']);
+  });
+
+  it('combines with every other criterion rather than replacing it', () => {
+    const result = applyFilters(library, { titleTypes: ['series', 'miniSeries'], minRating: 90 });
+    expect(result.map((f) => f.title)).toEqual(['Chernobyl']);
+  });
+
+  it('ignores an empty list, so an untouched filter excludes nothing', () => {
+    expect(applyFilters(library, { titleTypes: [] })).toHaveLength(3);
+  });
+
+  it('offers only the types the library actually holds', () => {
+    expect(availableTitleTypes(library).sort()).toEqual(['miniSeries', 'movie', 'series']);
   });
 });

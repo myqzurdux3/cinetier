@@ -11,6 +11,7 @@ function film(overrides: Partial<Film> & Pick<Film, 'title'>): Film {
     imdbId: null,
     tmdbId: null,
     year: 1999,
+    titleType: 'movie',
     rating: null,
     ratingScale: 'imdb10',
     watchedAt: null,
@@ -317,7 +318,9 @@ describe('mergeLibraries on real exports', () => {
     const forward = mergeLibraries(imdb, letterboxd);
     const backward = mergeLibraries(letterboxd, imdb);
 
-    expect(forward).toHaveLength(9);
+    // 6 IMDb titles (five films and a series) + 5 Letterboxd films, with one pair
+    // sharing an identity.
+    expect(forward).toHaveLength(10);
     expect(backward).toEqual(forward);
   });
 
@@ -333,5 +336,32 @@ describe('mergeLibraries on real exports', () => {
     expect(matrix?.watchedAt).toEqual(new Date('2025-03-09'));
     expect(matrix?.watchedAtIsApproximate).toBe(false);
     expect(matrix?.isRewatch).toBe(true);
+  });
+});
+
+describe('mergeLibraries on title types', () => {
+  it('keeps a series a series, whichever library it is merged into', () => {
+    // Letterboxd calls everything a film because it catalogues nothing else, so
+    // its claim must not overwrite the type IMDb actually assigned.
+    const imdb = film({ title: 'Fargo', year: 2014, titleType: 'series', imdbId: 'tt2802850' });
+    const letterboxd = film({ title: 'Fargo', year: 2014, titleType: 'movie', id: 'lb:fargo' });
+
+    expect(mergeLibraries([imdb], [letterboxd])[0]!.titleType).toBe('series');
+    expect(mergeLibraries([letterboxd], [imdb])[0]!.titleType).toBe('series');
+  });
+
+  it('lets any recognized type displace an unclassifiable one', () => {
+    // The unclassifiable record is the one without an IMDb id, so it is the record
+    // the merge builds on: if specificity did not lift it, 'other' would survive.
+    const unknown = film({ title: 'Solaris', year: 1972, titleType: 'other', id: 'lb:solaris' });
+    const classified = film({
+      title: 'Solaris',
+      year: 1972,
+      titleType: 'movie',
+      imdbId: 'tt0069293',
+    });
+
+    expect(mergeLibraries([unknown], [classified])[0]!.titleType).toBe('movie');
+    expect(mergeLibraries([classified], [unknown])[0]!.titleType).toBe('movie');
   });
 });

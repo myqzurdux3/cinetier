@@ -37,7 +37,7 @@ describe('importFiles', () => {
     const outcome = await importFiles([file('export (1).csv', imdbCsv)]);
     expect(outcome.status).toBe('ok');
     if (outcome.status !== 'ok') return;
-    expect(outcome.films).toHaveLength(5);
+    expect(outcome.films).toHaveLength(6);
     expect(outcome.films.every((f) => f.source === 'imdb')).toBe(true);
   });
 
@@ -53,9 +53,9 @@ describe('importFiles', () => {
     expect(outcome.status).toBe('ok');
     if (outcome.status !== 'ok') return;
 
-    // 5 IMDb films + 5 diary films, with The Matrix, Pulp Fiction and Dune (2021)
+    // 6 IMDb titles + 5 diary films, with The Matrix, Pulp Fiction and Dune (2021)
     // appearing in both, so three pairs collapse.
-    expect(outcome.films).toHaveLength(7);
+    expect(outcome.films).toHaveLength(8);
 
     // Identity is title AND year: the IMDb fixture holds two different films called
     // Dune, and keeping them apart is the point of the year in the match key.
@@ -69,27 +69,55 @@ describe('importFiles', () => {
     expect(duneYears).toEqual([1984, 2021]);
   });
 
-  it('recognises an IMDb header with no trailing newline (single-line file)', async () => {
-    // The detection token "Your Rating" is placed last, so the header-slicing
-    // bug (which drops the file's final character when there is no newline)
-    // would break detection here even though it happens to survive on the
-    // real IMDb fixture, where "Your Rating" is not the final column.
-    const headerOnly = 'Title,Title Type,Year,Const,Your Rating';
-    const outcome = await importFiles([file('ratings.csv', headerOnly)]);
+  it('recognises an IMDb file whose last line has no trailing newline', async () => {
+    // The detection token "Title Type" is placed last and the file ends without
+    // a newline, so the header-slicing bug (which drops the file's final
+    // character in that case) would break detection here even though it happens
+    // to survive on the real IMDb fixture, where "Title Type" is mid-header.
+    const noTrailingNewline =
+      'Const,Your Rating,Title,Year,Title Type\ntt0133093,9,The Matrix,1999,Movie';
+    const outcome = await importFiles([file('export.csv', noTrailingNewline)]);
     expect(outcome.status).toBe('ok');
     if (outcome.status !== 'ok') return;
-    expect(outcome.films).toHaveLength(0);
+    expect(outcome.films).toHaveLength(1);
+    expect(outcome.films[0]!.source).toBe('imdb');
+  });
+
+  it('reports an import that produced no title, rather than an empty library', async () => {
+    // Reproduces a real French export made entirely of series and video games:
+    // every row is understood, none of them survives, and the old code handed
+    // the next screen an empty list that looked like a broken site.
+    const onlyGames =
+      'Const,Your Rating,Title,Year,Title Type\n' +
+      'tt2465146,9,The Last of Us,2013,Jeu vidéo\n' +
+      'tt9999001,8,Some Podcast,2020,Podcast Series\n';
+    const outcome = await importFiles([file('export.csv', onlyGames)]);
+    expect(outcome.status).toBe('error');
+    if (outcome.status !== 'error') return;
+    expect(outcome.message).toMatch(/2 entries/);
+  });
+
+  it('reports how many entries were skipped on a successful import', async () => {
+    const withAGame =
+      'Const,Your Rating,Title,Year,Title Type\n' +
+      'tt0133093,9,The Matrix,1999,Movie\n' +
+      'tt2465146,9,The Last of Us,2013,Video Game\n';
+    const outcome = await importFiles([file('export.csv', withAGame)]);
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') return;
+    expect(outcome.films).toHaveLength(1);
+    expect(outcome.skipped).toBe(1);
   });
 
   it("surfaces a ParseError's own message and hint, not the generic fallback", async () => {
-    // Passes looksLikeImdb (has Const and Your Rating) but is missing the other
-    // required columns, so parseImdbRatings throws from inside importFiles' try.
-    const outcome = await importFiles([file('ratings.csv', 'Const,Your Rating\ntt0133093,9\n')]);
+    // Passes looksLikeImdb (has Const and Title Type) but is missing Title, so
+    // parseImdbRatings throws from inside importFiles' try.
+    const outcome = await importFiles([file('ratings.csv', 'Const,Title Type\ntt0133093,Movie\n')]);
     expect(outcome.status).toBe('error');
     if (outcome.status !== 'error') return;
-    expect(outcome.message).toBe('This file is missing the column(s): Title, Title Type, Year.');
+    expect(outcome.message).toBe('This file is missing the column(s): Title.');
     expect(outcome.hint).toBe(
-      'Export "Your Ratings" from IMDb and upload the ratings.csv file it produces.',
+      'Export "Your Ratings" from IMDb, or any of your lists, and upload the .csv file it produces.',
     );
   });
 
@@ -128,9 +156,9 @@ describe('importFiles', () => {
 
     expect(outcome.status).toBe('ok');
     if (outcome.status !== 'ok') return;
-    // Same 5 + 5 with three overlaps as the loose-files case, so the archive's
+    // Same 6 + 5 with three overlaps as the loose-files case, so the archive's
     // contents are going through the very same merge.
-    expect(outcome.films).toHaveLength(7);
+    expect(outcome.films).toHaveLength(8);
   });
 
   it('reports an archive that holds none of the files it wants', async () => {

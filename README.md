@@ -20,8 +20,9 @@ Everything runs in your browser — no account, no upload, no server.
 You have rated hundreds of films on IMDb or Letterboxd. Cinetier turns that
 history into a tier list you can share.
 
-- **Import your own data.** Drop in an IMDb `ratings.csv` or a Letterboxd
-  export `.zip`, exactly as those services give it to you.
+- **Import your own data.** Drop in an IMDb export or a Letterboxd export
+  `.zip`, exactly as those services give it to you — ratings, watchlists and
+  lists alike, films and series alike, in whatever language your account uses.
 - **Filter before you rank.** Only films you watched this year. Only those you
   rated above four stars. Only 1980s horror under 100 minutes. Only the ones you
   liked far more than everyone else did.
