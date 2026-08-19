@@ -6,8 +6,14 @@ import {
   availableTitleTypes,
   availableDecades,
   runtimeBounds,
+  activeCriteria,
+  withoutCriterion,
+  subsetCriteria,
+  describeCriterion,
+  mostRestrictiveCriterion,
 } from '@/domain/filters';
 import type { Film } from '@/domain/film';
+import type { FilterCriteria } from '@/domain/filters';
 
 function film(overrides: Partial<Film> & Pick<Film, 'title'>): Film {
   return {
@@ -241,5 +247,129 @@ describe('runtimeBounds', () => {
     // Which is a Letterboxd-only library before the details pass has run. The
     // Runtime section reads this to decide it has nothing to offer yet.
     expect(runtimeBounds([film({ title: 'Unknown', runtimeMinutes: null })])).toBeNull();
+  });
+});
+
+describe('activeCriteria', () => {
+  it('ignores keys that are absent, undefined, empty, or false', () => {
+    // Every control writes `undefined` rather than deleting a key, and an
+    // unchecked box writes `false`. None of those is a filter, and treating one
+    // as active would light up the clear-all action over an unfiltered library.
+    const criteria: FilterCriteria = {
+      minRating: undefined,
+      genres: [],
+      onlyUnrated: false,
+      titleTypes: ['movie'],
+      topN: 25,
+    };
+    expect(activeCriteria(criteria)).toEqual(['titleTypes', 'topN']);
+  });
+
+  it('counts a zero bound as active, because zero is a bound', () => {
+    expect(activeCriteria({ minRating: 0 })).toEqual(['minRating']);
+  });
+});
+
+describe('withoutCriterion', () => {
+  it('removes exactly the named criterion', () => {
+    const criteria: FilterCriteria = { minRating: 80, genres: ['Drama'], topN: 10 };
+    expect(withoutCriterion(criteria, 'genres')).toEqual({ minRating: 80, topN: 10 });
+  });
+
+  it('leaves the original untouched', () => {
+    const criteria: FilterCriteria = { minRating: 80 };
+    withoutCriterion(criteria, 'minRating');
+    expect(criteria.minRating).toBe(80);
+  });
+});
+
+describe('subsetCriteria', () => {
+  it('keeps only the named keys, and only when they are active', () => {
+    const criteria: FilterCriteria = {
+      minRating: 80,
+      maxRating: undefined,
+      genres: ['Drama'],
+    };
+    expect(subsetCriteria(criteria, ['minRating', 'maxRating'])).toEqual({ minRating: 80 });
+  });
+});
+
+describe('describeCriterion', () => {
+  it('names each criterion in the words the chip shows', () => {
+    expect(describeCriterion('minRating', { minRating: 80 })).toBe('Rating 80 or more');
+    expect(describeCriterion('maxRating', { maxRating: 60 })).toBe('Rating 60 or less');
+    expect(describeCriterion('onlyUnrated', { onlyUnrated: true })).toBe('Unrated only');
+    expect(describeCriterion('genres', { genres: ['Drama', 'Crime'] })).toBe('Genre: Drama, Crime');
+    expect(describeCriterion('directors', { directors: ['Michael Mann'] })).toBe(
+      'Director: Michael Mann',
+    );
+    expect(describeCriterion('decades', { decades: [1980, 1990] })).toBe('Decade: 1980s, 1990s');
+    expect(describeCriterion('titleTypes', { titleTypes: ['movie', 'series'] })).toBe(
+      'Type: films, series',
+    );
+    expect(describeCriterion('minRuntimeMinutes', { minRuntimeMinutes: 90 })).toBe(
+      'At least 90 minutes',
+    );
+    expect(describeCriterion('maxRuntimeMinutes', { maxRuntimeMinutes: 120 })).toBe(
+      'At most 120 minutes',
+    );
+    expect(describeCriterion('onlyRewatches', { onlyRewatches: true })).toBe('Rewatches only');
+    expect(describeCriterion('topN', { topN: 50 })).toBe('Top 50');
+  });
+
+  it('writes dates in an unambiguous order, not the machine locale', () => {
+    // A test that formatted through toLocaleDateString would pass on the author's
+    // machine and fail in CI, or worse, pass in both while showing 03/09 to a
+    // reader who reads it as September.
+    expect(describeCriterion('watchedAfter', { watchedAfter: new Date(2024, 0, 31) })).toBe(
+      'Watched after 2024-01-31',
+    );
+    expect(describeCriterion('watchedBefore', { watchedBefore: new Date(2025, 11, 1) })).toBe(
+      'Watched before 2025-12-01',
+    );
+  });
+
+  it('states a rating delta in the direction the reader set it', () => {
+    // maxRatingDelta is stored negative — "delta at most -10" is "10 below the
+    // public score" — and a chip reading "-10" would be unreadable.
+    expect(describeCriterion('minRatingDelta', { minRatingDelta: 10 })).toBe(
+      '10 or more above the public score',
+    );
+    expect(describeCriterion('maxRatingDelta', { maxRatingDelta: -10 })).toBe(
+      '10 or more below the public score',
+    );
+  });
+});
+
+describe('mostRestrictiveCriterion', () => {
+  const library = [
+    film({ title: 'A', rating: 95, genres: ['Drama'] }),
+    film({ title: 'B', rating: 40, genres: ['Drama'] }),
+    film({ title: 'C', rating: 30, genres: ['Comedy'] }),
+    film({ title: 'D', rating: 20, genres: ['Comedy'] }),
+  ];
+
+  it('names the criterion whose removal admits the most films', () => {
+    // minRating 90 alone admits one film; genres ['Drama'] alone admits two.
+    // Together they admit one, so removing minRating gains one and removing
+    // genres gains nothing.
+    expect(mostRestrictiveCriterion(library, { minRating: 90, genres: ['Drama'] })).toBe(
+      'minRating',
+    );
+  });
+
+  it('names the other one when the balance reverses', () => {
+    expect(mostRestrictiveCriterion(library, { minRating: 20, genres: ['Comedy'] })).toBe('genres');
+  });
+
+  it('reports nothing when no single removal admits another film', () => {
+    // Two criteria that each exclude everything on their own: removing either
+    // leaves the other still admitting nothing, so there is no one culprit to
+    // name and the screen must say so instead of blaming an innocent control.
+    expect(mostRestrictiveCriterion(library, { minRating: 99, genres: ['Western'] })).toBeNull();
+  });
+
+  it('reports nothing when nothing is filtered', () => {
+    expect(mostRestrictiveCriterion(library, {})).toBeNull();
   });
 });
