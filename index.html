@@ -3,6 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Cinetier ships one deliberate dark palette. color-scheme tells the browser
+      so form controls and scrollbars match, and darkreader-lock tells the Dark
+      Reader extension to leave the page alone: its dynamic mode rewrites every
+      SVG fill to its own off-white, which turns the logo into a white blob and
+      flattens the tier colours the interface is built on.
+    -->
+    <meta name="color-scheme" content="dark" />
+    <meta name="darkreader-lock" />
     <title>Cinetier — Turn your film history into a tier list</title>
     <meta name="description" content="Import your IMDb or Letterboxd history and rank it. Runs entirely in your browser." />
     <!--
