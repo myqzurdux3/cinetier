@@ -115,11 +115,10 @@ export function DirectorControls({ films, criteria, onChange }: ControlsProps) {
   const [query, setQuery] = useState('');
   const selected = criteria.directors ?? [];
 
+  const directors = availableDirectors(films);
   const needle = query.trim().toLowerCase();
   const matching =
-    needle === ''
-      ? availableDirectors(films)
-      : availableDirectors(films).filter((name) => name.toLowerCase().includes(needle));
+    needle === '' ? directors : directors.filter((name) => name.toLowerCase().includes(needle));
   const shown = matching.slice(0, DIRECTOR_LIMIT);
 
   // Anything already chosen stays on screen whatever the search says, so a
