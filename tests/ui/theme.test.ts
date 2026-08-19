@@ -72,8 +72,13 @@ describe('the inline no-flash script', () => {
   });
 
   it('applies every theme that is not the default', () => {
+    // Asserting the theme name alone is satisfied by the comment a few lines
+    // above the script (which says "neon" too), so mutating the script's
+    // comparison — t === 'neon' to t === 'noen' — would leave this green
+    // while every neon reader gets a flash of the wrong theme. Asserting the
+    // exact comparison expression closes that hole.
     for (const theme of THEMES.filter((t) => t !== DEFAULT_THEME)) {
-      expect(html).toContain(theme);
+      expect(html).toContain(`t === '${theme}'`);
     }
   });
 });
