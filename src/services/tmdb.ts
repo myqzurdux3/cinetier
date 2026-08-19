@@ -7,6 +7,12 @@ export interface TmdbMatch {
   publicRating: number | null;
 }
 
+export interface TmdbDetails {
+  genres: string[];
+  runtimeMinutes: number | null;
+  directors: string[];
+}
+
 interface TmdbMovieSummary {
   id: number;
   poster_path: string | null;
