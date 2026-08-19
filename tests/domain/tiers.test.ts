@@ -9,6 +9,7 @@ function film(id: string, rating: number | null): Film {
     tmdbId: null,
     title: id,
     year: 2000,
+    titleType: 'movie',
     rating,
     ratingScale: 'imdb10',
     watchedAt: null,

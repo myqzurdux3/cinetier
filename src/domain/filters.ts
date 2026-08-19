@@ -1,6 +1,9 @@
 import type { Film } from './film';
+import type { TitleType } from './titleType';
 
 export interface FilterCriteria {
+  /** Keep only these kinds of title, e.g. ['movie'] for a films-only tier list. */
+  titleTypes?: TitleType[];
   minRating?: number;
   maxRating?: number;
   onlyUnrated?: boolean;
@@ -23,6 +26,7 @@ export interface FilterCriteria {
 
 function matches(film: Film, criteria: FilterCriteria): boolean {
   const {
+    titleTypes,
     minRating,
     maxRating,
     onlyUnrated,
@@ -37,6 +41,8 @@ function matches(film: Film, criteria: FilterCriteria): boolean {
     minRatingDelta,
     maxRatingDelta,
   } = criteria;
+
+  if (titleTypes?.length && !titleTypes.includes(film.titleType)) return false;
 
   // onlyUnrated is a criterion on the rating axis, not a short circuit: it must combine
   // conjunctively with every other criterion rather than swallowing them.
@@ -103,4 +109,9 @@ export function availableGenres(films: Film[]): string[] {
 
 export function availableDirectors(films: Film[]): string[] {
   return uniqueSorted(films.flatMap((film) => film.directors));
+}
+
+/** The kinds of title actually present, so the filter rail offers no empty option. */
+export function availableTitleTypes(films: Film[]): TitleType[] {
+  return [...new Set(films.map((film) => film.titleType))];
 }

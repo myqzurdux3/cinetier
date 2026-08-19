@@ -26,6 +26,7 @@ function film(id: string): Film {
     tmdbId: null,
     title: id,
     year: 2000,
+    titleType: 'movie',
     rating: 80,
     ratingScale: 'imdb10',
     watchedAt: null,

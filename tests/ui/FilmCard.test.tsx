@@ -10,6 +10,7 @@ function film(overrides: Partial<Film> = {}): Film {
     tmdbId: null,
     title: 'The Matrix',
     year: 1999,
+    titleType: 'movie',
     rating: 90,
     ratingScale: 'imdb10',
     watchedAt: null,

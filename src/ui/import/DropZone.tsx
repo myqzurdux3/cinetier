@@ -65,8 +65,8 @@ export function DropZone({ onImported }: DropZoneProps) {
       >
         <p className="text-lg">{busy ? 'Reading your export…' : 'Drop your export here'}</p>
         <p className="mt-2 text-sm text-ink-dim">
-          An IMDb <code>ratings.csv</code>, or a Letterboxd <code>.zip</code> exactly as you
-          downloaded it.
+          An IMDb <code>.csv</code>, or a Letterboxd <code>.zip</code> exactly as you downloaded it
+          — whatever the file is named.
         </p>
         <p role="status" aria-live="polite" className="sr-only">
           {busy ? 'Reading your export…' : ''}

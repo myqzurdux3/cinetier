@@ -32,8 +32,34 @@ describe('lookupByImdbId', () => {
   });
 
   it('returns null when TMDB knows nothing about that identifier', async () => {
-    mockFetch({ movie_results: [] });
+    mockFetch({ movie_results: [], tv_results: [] });
     expect(await lookupByImdbId('tt9999999')).toBeNull();
+  });
+
+  it('falls back to the television result, so an imported series still gets a poster', async () => {
+    // TMDB files films and series in separate buckets; reading only movie_results
+    // left every series in the library with no artwork.
+    mockFetch({
+      movie_results: [],
+      tv_results: [{ id: 1396, poster_path: '/breaking-bad.jpg', vote_average: 8.9 }],
+    });
+
+    const match = await lookupByImdbId('tt0903747');
+
+    expect(match).toEqual({
+      tmdbId: 1396,
+      imdbId: 'tt0903747',
+      posterPath: '/breaking-bad.jpg',
+      publicRating: 89,
+    });
+  });
+
+  it('prefers the film when a single identifier somehow answers in both buckets', async () => {
+    mockFetch({
+      movie_results: [{ id: 1, poster_path: '/film.jpg', vote_average: 7 }],
+      tv_results: [{ id: 2, poster_path: '/series.jpg', vote_average: 8 }],
+    });
+    expect((await lookupByImdbId('tt0000002'))?.tmdbId).toBe(1);
   });
 
   it('treats a zero vote average as no public rating rather than a rating of zero', async () => {

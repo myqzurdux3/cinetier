@@ -106,3 +106,30 @@ title plus year, and this is the stated cost of that rule.
   possible once the library screen shipped.
 - **CI actions target a deprecated runner.** `actions/checkout@v4` and `setup-node@v4` warn;
   a bump to `@v5` clears it.
+
+## Closed on 2026-08-19, from a real user import
+
+A real IMDb export exposed three defects at once, all fixed on
+`fix/series-and-unrated-imports`:
+
+- **The `Title Type` column is localized.** A French account exports `Film` and
+  `Série télévisée`; the parser compared against the literal `movie`, so a
+  French export imported nothing. Types are now classified across languages by
+  `src/domain/titleType.ts`, and an unrecognized label is imported as `other`
+  rather than dropped — failing open, because a silently emptied import is the
+  worst outcome available.
+- **An import that produced no film handed the next screen an empty library**,
+  which reads as a broken site. `importFiles` now returns an error naming how
+  many entries it had to skip.
+- **Series were dropped by design.** They are now first-class and separated by
+  `FilterCriteria.titleTypes`; `lookupByImdbId` reads TMDB's `tv_results`
+  alongside `movie_results`, so a series gets its poster.
+
+Also closed: IMDb list exports (no `Your Rating` column) and Letterboxd
+`watched.csv` now import as unrated titles, so watch history no longer requires
+a score.
+
+**Still open, and now the top of the list:** the interface has no visual
+identity — it is grey type on a grey ground, and the logo's colours are
+invisible at 28px. The user asked for a strong identity before anything else
+ships on top of it.

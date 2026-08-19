@@ -6,15 +6,19 @@ import { readLetterboxdArchive } from '@/parsers/archive';
 import { ParseError } from '@/parsers/types';
 
 export type ImportOutcome =
-  | { status: 'ok'; films: Film[]; warnings: string[] }
+  | { status: 'ok'; films: Film[]; warnings: string[]; skipped: number }
   | { status: 'error'; message: string; hint: string };
 
 const GENERIC_HINT =
   'Drop an IMDb ratings.csv, or a Letterboxd export .zip — or the diary.csv and ratings.csv from inside it.';
 
-/** An IMDb ratings export is identified by its columns, since its name varies. */
+/**
+ * An IMDb export is identified by its columns, since its name varies — recent
+ * exports arrive named after a random identifier. "Your Rating" is not part of
+ * the test: a list export has every other column but that one.
+ */
 function looksLikeImdb(header: string): boolean {
-  return header.includes('Const') && header.includes('Your Rating');
+  return header.includes('Const') && header.includes('Title Type');
 }
 
 function letterboxdSlot(name: string): keyof LetterboxdFiles | null {
@@ -37,6 +41,7 @@ export async function importFiles(files: File[]): Promise<ImportOutcome> {
 
   const libraries: Film[][] = [];
   const warnings: string[] = [];
+  let skipped = 0;
   const letterboxd: LetterboxdFiles = {};
 
   try {
@@ -54,6 +59,7 @@ export async function importFiles(files: File[]): Promise<ImportOutcome> {
         const result = parseImdbRatings(text);
         libraries.push(result.films);
         warnings.push(...result.warnings);
+        skipped += result.skipped;
         continue;
       }
 
@@ -74,9 +80,26 @@ export async function importFiles(files: File[]): Promise<ImportOutcome> {
       const result = parseLetterboxdExport(letterboxd);
       libraries.push(result.films);
       warnings.push(...result.warnings);
+      skipped += result.skipped;
     }
 
-    return { status: 'ok', films: mergeLibraries(...libraries), warnings };
+    const films = mergeLibraries(...libraries);
+
+    // An import that yields nothing must say so here. Handing an empty library
+    // to the next screen shows a blank page that looks like a broken site
+    // rather than a file that had nothing importable in it.
+    if (films.length === 0) {
+      return {
+        status: 'error',
+        message:
+          skipped > 0
+            ? `That file held ${skipped} entr${skipped === 1 ? 'y' : 'ies'}, but none of them was a title Cinetier can rank.`
+            : 'That file held no titles.',
+        hint: GENERIC_HINT,
+      };
+    }
+
+    return { status: 'ok', films, warnings, skipped };
   } catch (error) {
     if (error instanceof ParseError) {
       return { status: 'error', message: error.message, hint: error.hint };

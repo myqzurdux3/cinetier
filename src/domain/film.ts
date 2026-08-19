@@ -1,4 +1,5 @@
 import type { RatingScale } from './rating';
+import type { TitleType } from './titleType';
 
 export type FilmSource = 'imdb' | 'letterboxd';
 
@@ -13,6 +14,8 @@ export interface Film {
   tmdbId: number | null;
   title: string;
   year: number | null;
+  /** Film, series, episode... normalized from the source's localized label. */
+  titleType: TitleType;
   /** Normalized 0-100, or null when the film was watched but not rated. */
   rating: number | null;
   /** The scale this rating was originally expressed in, for display. */
