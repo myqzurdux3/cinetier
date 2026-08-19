@@ -75,9 +75,9 @@ title plus year, and this is the stated cost of that rule.
   5000 array copies and 5000 React commits. The specification's risk table names libraries
   of that size. Batching progress — every N films, or on an animation frame — is the cheap
   fix.
-- **The grid is fixed at six columns** regardless of viewport, so a phone renders six very
-  small posters per row. The poster-size control is next-plan scope; a responsive column
-  count is not.
+- ~~**The grid is fixed at six columns** regardless of viewport, so a phone renders six very
+  small posters per row.~~ Superseded: the grid now defaults to 8 columns (see the
+  visual-identity entry further down), and a responsive column count is still not scoped.
 - **zip.js cannot be code-split.** It is eagerly imported by a `parsers/` module, and the
   layer rule forbids dynamic `import()` there, so every IMDb-only visitor downloads it.
 
@@ -129,7 +129,25 @@ Also closed: IMDb list exports (no `Your Rating` column) and Letterboxd
 `watched.csv` now import as unrated titles, so watch history no longer requires
 a score.
 
-**Still open, and now the top of the list:** the interface has no visual
+~~**Still open, and now the top of the list:** the interface has no visual
 identity — it is grey type on a grey ground, and the logo's colours are
 invisible at 28px. The user asked for a strong identity before anything else
-ships on top of it.
+ships on top of it.~~ Closed by the visual-identity plan (2026-08-19): two
+tested, AA-contrast palettes (salle obscure and a neon video-shop theme),
+self-hosted display and text faces, a lit mark legible at header size, and a
+themed landing screen and library grid.
+
+That plan deferred three things of its own:
+
+- **The grid's column count is fixed at 8** rather than responsive to the
+  container. A breakpoint-aware column count needs a measured container,
+  which is a change to how the virtualizer is sized; worth doing once the
+  tier board settles the page's layout. This supersedes the older entry
+  above about six columns, which predates the grid's current default.
+- **Neon's `--shadow-glow` token is defined but consumed only by the theme
+  toggle and the service cards.** The tier board is where it will earn its
+  place more broadly.
+- **The mark's geometry test parses path data with a regex** that only
+  holds for the current hand-written path style. A future redraw of the
+  logo, or one produced by a design tool that emits different path
+  commands, can silently stop being checked by that test.
