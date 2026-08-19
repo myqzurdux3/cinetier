@@ -4,6 +4,8 @@ import {
   availableGenres,
   availableDirectors,
   availableTitleTypes,
+  availableDecades,
+  runtimeBounds,
 } from '@/domain/filters';
 import type { Film } from '@/domain/film';
 
@@ -206,5 +208,38 @@ describe('filtering by title type', () => {
 
   it('offers only the types the library actually holds', () => {
     expect(availableTitleTypes(library).sort()).toEqual(['miniSeries', 'movie', 'series']);
+  });
+});
+
+describe('availableDecades', () => {
+  it('lists each decade present once, oldest first', () => {
+    const films = [
+      film({ title: 'Pulp Fiction', year: 1994 }),
+      film({ title: 'The Matrix', year: 1999 }),
+      film({ title: 'Blade Runner', year: 1982 }),
+    ];
+    expect(availableDecades(films)).toEqual([1980, 1990]);
+  });
+
+  it('ignores films with no year rather than inventing a decade for them', () => {
+    expect(availableDecades([film({ title: 'Unknown', year: null })])).toEqual([]);
+  });
+});
+
+describe('runtimeBounds', () => {
+  it('reports the shortest and the longest runtime present', () => {
+    const films = [
+      film({ title: 'Short', runtimeMinutes: 74 }),
+      film({ title: 'Long', runtimeMinutes: 201 }),
+      film({ title: 'Middle', runtimeMinutes: 120 }),
+      film({ title: 'Unknown', runtimeMinutes: null }),
+    ];
+    expect(runtimeBounds(films)).toEqual({ min: 74, max: 201 });
+  });
+
+  it('reports nothing when no film carries a runtime', () => {
+    // Which is a Letterboxd-only library before the details pass has run. The
+    // Runtime section reads this to decide it has nothing to offer yet.
+    expect(runtimeBounds([film({ title: 'Unknown', runtimeMinutes: null })])).toBeNull();
   });
 });

@@ -115,3 +115,25 @@ export function availableDirectors(films: Film[]): string[] {
 export function availableTitleTypes(films: Film[]): TitleType[] {
   return [...new Set(films.map((film) => film.titleType))];
 }
+
+/** Decade start years present in the library, ascending: [1980, 1990]. */
+export function availableDecades(films: Film[]): number[] {
+  const decades = new Set<number>();
+  for (const film of films) {
+    if (film.year === null) continue;
+    decades.add(Math.floor(film.year / 10) * 10);
+  }
+  return [...decades].sort((a, b) => a - b);
+}
+
+/**
+ * The runtimes the library spans, or null when nothing carries one — which is
+ * every Letterboxd import until the details pass has run.
+ */
+export function runtimeBounds(films: Film[]): { min: number; max: number } | null {
+  const runtimes = films
+    .map((film) => film.runtimeMinutes)
+    .filter((runtime): runtime is number => runtime !== null);
+  if (runtimes.length === 0) return null;
+  return { min: Math.min(...runtimes), max: Math.max(...runtimes) };
+}
