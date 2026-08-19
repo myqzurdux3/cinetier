@@ -30,6 +30,8 @@ history into a tier list you can share.
   from the scores you already gave, and you drag from there — or empty the board
   and rank entirely by hand.
 - **Export a PNG** to share, and keep as many saved tier lists as you like.
+- **Two looks.** Salle obscure by default, or a neon video-shop palette —
+  remembered between visits, and neither one asks the network for a font.
 
 ## Privacy
 

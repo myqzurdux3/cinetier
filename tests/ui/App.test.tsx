@@ -170,11 +170,41 @@ describe('App persistence', () => {
 });
 
 describe('App shell', () => {
-  it('does not print the same tagline twice on one screen', () => {
-    // The header carries a tagline of its own from `sm` up, so a second copy of
-    // the same sentence in the page body reads as a rendering mistake.
+  it('does not print the header tagline a second time on the landing screen', () => {
+    // The header carries a tagline of its own from `sm` up. The landing screen
+    // makes its own, differently worded, case for the product below the fold —
+    // a literal second copy of the header's sentence would read as a rendering
+    // mistake.
     render(<App />);
-    expect(screen.getAllByText(/turn your film history into a tier list/i)).toHaveLength(1);
+    expect(screen.getAllByText(/rank what you have already seen/i)).toHaveLength(1);
+  });
+
+  it('renders the actual landing screen, not just a bare source picker, on the opening screen', () => {
+    // Landing is well tested in isolation, but nothing outside Landing.test.tsx
+    // proves App actually wires it in rather than still rendering the old bare
+    // SourcePicker. Assert the content that only Landing supplies: the level-1
+    // heading (exactly one), the tier band with its six letters, and the
+    // privacy line promoted out of the footer's fine print.
+    render(<App />);
+
+    const headings = screen.getAllByRole('heading', { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveTextContent(/cinetier/i);
+
+    const band = screen.getByTestId('tier-band');
+    expect(Array.from(band.children).map((el) => el.textContent)).toEqual([
+      'S',
+      'A',
+      'B',
+      'C',
+      'D',
+      'F',
+    ]);
+
+    // The privacy line is deliberately repeated: once promoted onto the
+    // landing screen itself, and once in the footer's fine print underneath
+    // every screen. Both copies are expected here, not a rendering mistake.
+    expect(screen.getAllByText(/never leave your browser/i)).toHaveLength(2);
   });
 });
 

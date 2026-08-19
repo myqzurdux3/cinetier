@@ -75,4 +75,34 @@ export default tseslint.config(
       'react-hooks/exhaustive-deps': 'warn',
     },
   },
+  {
+    files: ['src/ui/**/*.{ts,tsx}'],
+    ignores: ['src/ui/logoMark.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          // Every colour belongs to a theme, and a literal belongs to neither.
+          // logoMark.ts is exempt: a favicon data URI cannot read a CSS variable,
+          // so the mark's literal values live there and nowhere else.
+          selector:
+            "Literal[value=/#[0-9a-fA-F]{3,8}\\b|\\brgba?\\(|\\bhsla?\\(/]",
+          message:
+            'Colours come from theme tokens, never literals — add a token in src/index.css.',
+        },
+        {
+          // The Literal selector above only matches string/number literals —
+          // it never sees inside a template literal (`#00ff00`), whose text
+          // lives on TemplateElement nodes instead. Without this second
+          // selector a colour hidden in an interpolated string, like
+          // Landing.tsx's own `var(--color-${tier.token})` pattern but with a
+          // hex value spliced in instead of a token, sails straight through.
+          selector:
+            "TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b|\\brgba?\\(|\\bhsla?\\(/]",
+          message:
+            'Colours come from theme tokens, never literals — add a token in src/index.css.',
+        },
+      ],
+    },
+  },
 );

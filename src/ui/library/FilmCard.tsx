@@ -26,7 +26,7 @@ export function FilmCard({ film }: FilmCardProps) {
       </div>
 
       {film.rating !== null && (
-        <figcaption className="absolute right-1.5 top-1.5 rounded bg-screen/85 px-1.5 py-0.5 text-xs font-medium">
+        <figcaption className="absolute right-1.5 top-1.5 rounded bg-accent px-1.5 py-0.5 font-display text-xs tracking-wide text-on-accent">
           {formatRating(film.rating, film.ratingScale)}
         </figcaption>
       )}

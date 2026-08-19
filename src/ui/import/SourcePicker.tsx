@@ -21,9 +21,9 @@ export function SourcePicker({ onPick }: SourcePickerProps) {
           key={source.id}
           type="button"
           onClick={() => onPick(source.id)}
-          className="rounded-lg border border-line bg-surface p-6 text-left transition-colors hover:border-accent"
+          className="rounded-card border border-line bg-surface p-6 text-left shadow-[var(--shadow-glow)] transition-all hover:-translate-y-0.5 hover:border-accent hover:bg-surface-raised focus-visible:border-accent focus-visible:outline-none motion-reduce:hover:translate-y-0"
         >
-          <span className="block text-xl font-semibold">{source.name}</span>
+          <span className="block font-display text-2xl uppercase tracking-wide">{source.name}</span>
           <span className="mt-1 block text-sm text-ink-dim">{source.blurb}</span>
         </button>
       ))}

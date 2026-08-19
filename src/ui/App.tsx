@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Shell } from './Shell';
-import { SourcePicker, type ImportSource } from './import/SourcePicker';
+import { Landing } from './Landing';
+import type { ImportSource } from './import/SourcePicker';
 import { ImportGuide } from './import/ImportGuide';
 import { FilmGrid } from './library/FilmGrid';
-import { LibrarySummary } from './library/LibrarySummary';
+import { LibraryHeader } from './library/LibraryHeader';
 import { enrichLibrary } from '@/enrich/enrichLibrary';
 import { saveLibrary, loadLibrary, clearLibrary } from '@/services/library';
 import type { ImportOutcome } from './import/importFiles';
@@ -15,6 +16,10 @@ export default function App() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [skipped, setSkipped] = useState(0);
   const [enriching, setEnriching] = useState<{ done: number; total: number } | null>(null);
+  // Bumped once per import (not the enrichment guard's runId, which is a ref
+  // and does not re-render). This is what tells the grid to replay its
+  // entrance animation.
+  const [generation, setGeneration] = useState(0);
 
   // Restore whatever was saved last time. `restoreCancelled` is set the moment
   // the user does anything that should win over the restore — starts an
@@ -52,6 +57,7 @@ export default function App() {
     restoreCancelled.current = true;
     const id = ++runId.current;
     setFilms(outcome.films);
+    setGeneration((n) => n + 1);
     setWarnings(outcome.warnings);
     setSkipped(outcome.skipped);
     setEnriching({ done: 0, total: outcome.films.length });
@@ -84,15 +90,15 @@ export default function App() {
   if (films !== null) {
     return (
       <Shell>
-        <div className="mx-auto max-w-6xl space-y-4 px-6 py-8">
-          <LibrarySummary
+        <div className="mx-auto max-w-7xl space-y-4 px-6 py-8">
+          <LibraryHeader
             films={films}
             warnings={warnings}
             skipped={skipped}
             enriching={enriching}
             onReset={reset}
           />
-          <FilmGrid films={films} />
+          <FilmGrid films={films} generation={generation} />
         </div>
       </Shell>
     );
@@ -100,16 +106,10 @@ export default function App() {
 
   return (
     <Shell>
-      <div className="mx-auto max-w-2xl px-6 py-16">
-        {source === null ? (
-          <>
-            <h1 className="mb-3 text-center text-3xl font-semibold tracking-tight">
-              Turn your film history into a tier list
-            </h1>
-            <p className="mb-10 text-center text-ink-dim">Where do you keep your films?</p>
-            <SourcePicker onPick={setSource} />
-          </>
-        ) : (
+      {source === null ? (
+        <Landing onPick={setSource} />
+      ) : (
+        <div className="mx-auto max-w-2xl px-6 py-16">
           <ImportGuide
             source={source}
             onBack={() => setSource(null)}
@@ -122,8 +122,8 @@ export default function App() {
               });
             }}
           />
-        )}
-      </div>
+        </div>
+      )}
     </Shell>
   );
 }

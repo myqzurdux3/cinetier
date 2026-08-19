@@ -1,20 +1,99 @@
-@import 'tailwindcss';
+/*
+  Tailwind's automatic source detection walks the whole project looking for
+  class names, and it does not know the difference between application code
+  and planning prose: a class name mentioned in a doc under docs/ (e.g. a
+  plan's example markup) got compiled into the production stylesheet even
+  though nothing in the app renders it. source(none) turns that heuristic
+  off; the two @source lines below say exactly what should be scanned.
+*/
+@import 'tailwindcss' source(none);
 
+@source './**/*.{ts,tsx}';
+@source '../index.html';
+
+/*
+  Salle obscure is the default theme, so its values live on :root rather than
+  behind a selector — a page with no data-theme attribute is already correct.
+  Vidéoclub néon redefines the same names below and nothing else: no component
+  knows a theme exists, so none of them needs testing twice.
+*/
 @theme {
-  --color-screen: #0a0a0b;
-  --color-surface: #141417;
-  --color-logo-body: #606068;
-  --color-logo-outline: #808088;
+  --color-screen: #0a0908;
+  --color-surface: #17140f;
+  --color-surface-raised: #211c15;
+  --color-ink: #f4efe6;
+  --color-ink-dim: #a39a8b;
+  --color-line: #2c261d;
   --color-accent: #e8b44a;
-  --color-tier-s: #e05263;
-  --color-tier-a: #e8834a;
+  --color-on-accent: #0a0908;
+  --color-danger: #e86a5c;
+
+  --color-tier-s: #e24b4b;
+  --color-tier-a: #e8823c;
   --color-tier-b: #e8b44a;
-  --color-tier-c: #8bc34a;
-  --color-tier-d: #4a9de8;
-  --color-tier-f: #7a7a85;
-  --color-ink: #f4f4f5;
-  --color-ink-dim: #a1a1aa;
-  --color-line: #27272a;
-  --color-danger: #f87171;
+  --color-tier-c: #9cbf4a;
+  --color-tier-d: #4fa3d1;
+  --color-tier-f: #6f6a60;
+
+  /* The accent's halo. Salle obscure is lit, not glowing. */
+  --shadow-glow: none;
+
+  /*
+    The page-wide overlay. One fixed layer, never one per card: a grain applied
+    to every poster tile is the version of this that ruins scrolling.
+  */
+  --texture-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  --texture-opacity: 0.035;
+  --vignette: radial-gradient(120% 60% at 50% 0%, rgb(232 180 74 / 0.09), transparent 70%);
+
+  --font-display: 'Oswald Variable', 'Arial Narrow', sans-serif;
+  --font-text: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
   --radius-card: 6px;
+}
+
+[data-theme='neon'] {
+  --color-screen: #08040f;
+  --color-surface: #150c22;
+  --color-surface-raised: #1f1030;
+  --color-ink: #f6f1ff;
+  --color-ink-dim: #a99cc4;
+  --color-line: #2e1d45;
+  --color-accent: #ff2e88;
+  --color-on-accent: #08040f;
+  --color-danger: #ff5c5c;
+
+  --color-tier-s: #ff2e88;
+  --color-tier-a: #ff6b3d;
+  --color-tier-b: #ffd23f;
+  --color-tier-c: #3dff9e;
+  --color-tier-d: #22e5ff;
+  --color-tier-f: #7a6e96;
+
+  --shadow-glow: 0 0 18px rgb(255 46 136 / 0.45);
+
+  /* Scanlines rather than grain: the video shop, not the projection booth. */
+  --texture-image: repeating-linear-gradient(
+    to bottom,
+    rgb(255 255 255 / 0.5) 0px,
+    rgb(255 255 255 / 0.5) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  --texture-opacity: 0.05;
+  --vignette: radial-gradient(120% 60% at 50% 0%, rgb(34 229 255 / 0.1), transparent 70%);
+}
+
+/*
+  Readers who ask for reduced transparency are asking not to have content sat
+  under a wash. Hiding the layer is the honest response; dimming it is not.
+*/
+@media (prefers-reduced-transparency: reduce) {
+  [data-texture] {
+    display: none;
+  }
+}
+
+body {
+  font-family: var(--font-text);
 }

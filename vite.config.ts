@@ -2,11 +2,12 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath, URL } from 'node:url';
+import { faviconPlugin } from './vite-plugins/favicon';
 
 export default defineConfig({
   // GitHub Pages serves the project at /cinetier/, local dev at /.
   base: process.env.GITHUB_ACTIONS ? '/cinetier/' : '/',
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), faviconPlugin()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
