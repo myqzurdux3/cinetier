@@ -41,28 +41,57 @@ const THEMES = {
   neon: { ...tokens('@theme'), ...tokens("[data-theme='neon']") },
 };
 
+type Combo = [pair: string, foreground: string, background: string];
+type Failure = { pair: string; ratio: number };
+
+/**
+ * Evaluates every combo against the threshold and returns all the ones that
+ * fall short, rather than throwing on the first — so a single failing
+ * assertion names every bad pair in one run, not just the first it hits.
+ */
+function failing(threshold: number, combos: Combo[]): Failure[] {
+  const failures: Failure[] = [];
+  for (const [pair, foreground, background] of combos) {
+    const r = ratio(foreground, background);
+    if (r < threshold) failures.push({ pair, ratio: r });
+  }
+  return failures;
+}
+
 describe.each(Object.entries(THEMES))('contrast in %s', (_name, t) => {
   it('reaches AA for body text on every surface', () => {
-    for (const surface of ['--color-screen', '--color-surface', '--color-surface-raised']) {
-      expect(ratio(t['--color-ink']!, t[surface]!)).toBeGreaterThanOrEqual(4.5);
-    }
+    const combos: Combo[] = ['--color-screen', '--color-surface', '--color-surface-raised'].map(
+      (surface) => [`ink on ${surface}`, t['--color-ink']!, t[surface]!],
+    );
+    expect(failing(4.5, combos)).toEqual([]);
   });
 
-  it('reaches AA for dimmed text on the two surfaces it is used on', () => {
-    for (const surface of ['--color-screen', '--color-surface']) {
-      expect(ratio(t['--color-ink-dim']!, t[surface]!)).toBeGreaterThanOrEqual(4.5);
-    }
+  it('reaches AA for dimmed text on the surfaces it is used on', () => {
+    // Used directly on the screen and card surfaces, and inside
+    // SourcePicker's buttons, whose resting background is the surface and
+    // whose hover background is surface-raised — so all three are real
+    // render paths, not just the two most obvious ones.
+    const combos: Combo[] = ['--color-screen', '--color-surface', '--color-surface-raised'].map(
+      (surface) => [`ink-dim on ${surface}`, t['--color-ink-dim']!, t[surface]!],
+    );
+    expect(failing(4.5, combos)).toEqual([]);
   });
 
   it('reaches AA for text sitting on the accent', () => {
-    expect(ratio(t['--color-on-accent']!, t['--color-accent']!)).toBeGreaterThanOrEqual(4.5);
+    const combos: Combo[] = [
+      ['on-accent on accent', t['--color-on-accent']!, t['--color-accent']!],
+    ];
+    expect(failing(4.5, combos)).toEqual([]);
   });
 
   it('keeps every tier band readable under its letter', () => {
     // The letter is what identifies a tier when the colours cannot be told
     // apart, so it has to be legible on all six.
-    for (const tier of ['s', 'a', 'b', 'c', 'd', 'f']) {
-      expect(ratio(t['--color-on-accent']!, t[`--color-tier-${tier}`]!)).toBeGreaterThanOrEqual(3);
-    }
+    const combos: Combo[] = ['s', 'a', 'b', 'c', 'd', 'f'].map((tier) => [
+      `on-accent on tier-${tier}`,
+      t['--color-on-accent']!,
+      t[`--color-tier-${tier}`]!,
+    ]);
+    expect(failing(3, combos)).toEqual([]);
   });
 });
