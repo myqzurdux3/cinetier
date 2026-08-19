@@ -87,3 +87,61 @@ export async function searchByTitle(title: string, year: number | null): Promise
 export function posterUrl(posterPath: string, size: 'w185' | 'w342' = 'w342'): string {
   return `${IMAGE_BASE}/${size}${posterPath}`;
 }
+
+interface TmdbNamed {
+  name?: string;
+}
+
+interface TmdbMovieDetail {
+  genres?: TmdbNamed[];
+  runtime?: number | null;
+  credits?: { crew?: { job?: string; name?: string }[] };
+}
+
+interface TmdbTvDetail {
+  genres?: TmdbNamed[];
+  episode_run_time?: number[];
+  created_by?: TmdbNamed[];
+}
+
+function names(values: TmdbNamed[] | undefined): string[] {
+  return (values ?? [])
+    .map((value) => value.name)
+    .filter((name): name is string => typeof name === 'string' && name !== '');
+}
+
+/** TMDB reports 0 for a runtime nobody has filled in, which is not a runtime. */
+function positiveRuntime(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+export async function fetchMovieDetails(tmdbId: number): Promise<TmdbDetails | null> {
+  const payload = await getJson(
+    `${BASE}/movie/${tmdbId}?api_key=${key()}&append_to_response=credits`,
+  );
+  if (payload === null) return null;
+
+  const detail = payload as TmdbMovieDetail;
+  return {
+    genres: names(detail.genres),
+    runtimeMinutes: positiveRuntime(detail.runtime),
+    directors: names((detail.credits?.crew ?? []).filter((member) => member.job === 'Director')),
+  };
+}
+
+/**
+ * A series has no director field. `created_by` is the closest true equivalent,
+ * and the rail shows it under the Director heading rather than inventing a
+ * second one for a handful of titles.
+ */
+export async function fetchTvDetails(tmdbId: number): Promise<TmdbDetails | null> {
+  const payload = await getJson(`${BASE}/tv/${tmdbId}?api_key=${key()}`);
+  if (payload === null) return null;
+
+  const detail = payload as TmdbTvDetail;
+  return {
+    genres: names(detail.genres),
+    runtimeMinutes: positiveRuntime(detail.episode_run_time?.[0]),
+    directors: names(detail.created_by),
+  };
+}

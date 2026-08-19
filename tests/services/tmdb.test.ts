@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { lookupByImdbId, searchByTitle, posterUrl } from '@/services/tmdb';
+import {
+  lookupByImdbId,
+  searchByTitle,
+  posterUrl,
+  fetchMovieDetails,
+  fetchTvDetails,
+} from '@/services/tmdb';
 
 function mockFetch(payload: unknown, ok = true) {
   const fetchMock = vi.fn().mockResolvedValue({
@@ -110,5 +116,92 @@ describe('posterUrl', () => {
   it('builds a TMDB image URL at the requested size', () => {
     expect(posterUrl('/matrix.jpg')).toBe('https://image.tmdb.org/t/p/w342/matrix.jpg');
     expect(posterUrl('/matrix.jpg', 'w185')).toBe('https://image.tmdb.org/t/p/w185/matrix.jpg');
+  });
+});
+
+describe('fetchMovieDetails', () => {
+  it('reads genres, runtime, and the crew members who directed', async () => {
+    mockFetch({
+      genres: [
+        { id: 18, name: 'Drama' },
+        { id: 80, name: 'Crime' },
+      ],
+      runtime: 170,
+      credits: {
+        crew: [
+          { job: 'Director', name: 'Michael Mann' },
+          { job: 'Editor', name: 'Dov Hoenig' },
+        ],
+      },
+    });
+
+    expect(await fetchMovieDetails(949)).toEqual({
+      genres: ['Drama', 'Crime'],
+      runtimeMinutes: 170,
+      directors: ['Michael Mann'],
+    });
+  });
+
+  it('asks the movie endpoint, with credits appended', async () => {
+    const fetchMock = mockFetch({ genres: [], runtime: null, credits: { crew: [] } });
+    await fetchMovieDetails(949);
+    const url = String(fetchMock.mock.calls[0]![0]);
+    expect(url).toContain('/movie/949');
+    expect(url).toContain('append_to_response=credits');
+  });
+
+  it('reports an answer of nothing as an answer, not as a failure', async () => {
+    // The difference matters: this marks the film as asked-about, and a null
+    // would leave the details pass selecting it again on every visit.
+    mockFetch({ genres: [], runtime: null, credits: { crew: [] } });
+    expect(await fetchMovieDetails(949)).not.toBeNull();
+    expect(await fetchMovieDetails(949)).toEqual({
+      genres: [],
+      runtimeMinutes: null,
+      directors: [],
+    });
+  });
+
+  it('reports null when the request fails', async () => {
+    mockFetch(null, false);
+    expect(await fetchMovieDetails(949)).toBeNull();
+  });
+
+  it('treats a zero runtime as no runtime', async () => {
+    // TMDB reports 0 for titles nobody has filled in, and a "0 minutes or more"
+    // filter bound is not a fact about the film.
+    mockFetch({ genres: [], runtime: 0, credits: { crew: [] } });
+    expect((await fetchMovieDetails(949))!.runtimeMinutes).toBeNull();
+  });
+});
+
+describe('fetchTvDetails', () => {
+  it('reads genres, episode runtime, and the creators', async () => {
+    // A series has no single director. created_by is the honest equivalent, and
+    // the interface shows it under the same heading.
+    mockFetch({
+      genres: [{ id: 18, name: 'Drama' }],
+      episode_run_time: [47],
+      created_by: [{ name: 'Vince Gilligan' }],
+    });
+
+    expect(await fetchTvDetails(1396)).toEqual({
+      genres: ['Drama'],
+      runtimeMinutes: 47,
+      directors: ['Vince Gilligan'],
+    });
+  });
+
+  it('asks the television endpoint', async () => {
+    // Asking /movie about a series returns nothing, and nothing looks exactly
+    // like a title with no genres — which is why this is pinned.
+    const fetchMock = mockFetch({ genres: [], episode_run_time: [], created_by: [] });
+    await fetchTvDetails(1396);
+    expect(String(fetchMock.mock.calls[0]![0])).toContain('/tv/1396');
+  });
+
+  it('reports null when the request fails', async () => {
+    mockFetch(null, false);
+    expect(await fetchTvDetails(1396)).toBeNull();
   });
 });
