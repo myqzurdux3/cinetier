@@ -37,7 +37,7 @@ export function LibrarySummary({
   const onlyFilms = films.every((film) => film.titleType === 'movie');
 
   return (
-    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 border-b border-line pb-4">
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
       <p className="text-lg">
         <span className="font-semibold">
           {films.length} {onlyFilms ? 'films' : 'titles'}

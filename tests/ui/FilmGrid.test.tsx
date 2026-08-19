@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { FilmGrid } from '@/ui/library/FilmGrid';
 import type { Film } from '@/domain/film';
 
@@ -32,7 +32,7 @@ function film(id: string): Film {
 // an assertion about virtualization itself (that cannot be meaningfully
 // tested here), just enough for the smoke test below to see real rows.
 // The stubbed height (800px) is deliberately larger than a single row
-// (232px) so that, with 8 films at columns={3} (3 rows), more than one
+// (214px) so that, with 8 films at columns={3} (3 rows), more than one
 // row falls inside the virtual window and the per-row slice arithmetic in
 // FilmGrid is actually exercised, not just row index 0.
 beforeEach(() => {
@@ -57,5 +57,30 @@ describe('FilmGrid', () => {
     for (const f of films) {
       expect(screen.getByText(f.title)).toBeInTheDocument();
     }
+  });
+
+  it('plays the entrance once per import, not on every render', async () => {
+    // The grid is virtualized: rows scrolled into view later must not animate,
+    // or a long library flickers for as long as the reader keeps scrolling.
+    const films = Array.from({ length: 12 }, (_, i) => film(`f${i}`));
+    const { container, rerender } = render(<FilmGrid films={films} generation={1} />);
+    expect(container.querySelectorAll('[data-entering="true"]').length).toBeGreaterThan(0);
+
+    // The entrance clears itself inside a requestAnimationFrame callback, which
+    // under jsdom is a real (async) timer rather than something React's act()
+    // flushes synchronously. Asserting "no replay on a plain rerender"
+    // immediately after the initial render would race that callback: on a slow
+    // run the flag could still read true, making the assertion below flaky
+    // rather than reliably true or false. Waiting for it to actually clear
+    // first removes that race.
+    await waitFor(() => {
+      expect(container.querySelectorAll('[data-entering="true"]').length).toBe(0);
+    });
+
+    rerender(<FilmGrid films={films} generation={1} />);
+    expect(container.querySelectorAll('[data-entering="true"]').length).toBe(0);
+
+    rerender(<FilmGrid films={films} generation={2} />);
+    expect(container.querySelectorAll('[data-entering="true"]').length).toBeGreaterThan(0);
   });
 });
