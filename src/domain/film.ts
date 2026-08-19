@@ -33,5 +33,13 @@ export interface Film {
   /** Normalized 0-100 public rating, when the source provides one. */
   publicRating: number | null;
   posterPath: string | null;
+  /**
+   * True once TMDB has been asked for this title's genres, directors and
+   * runtime — whatever it answered. An empty `genres` array with this false
+   * means "not asked yet"; with this true it means "asked, and there are none".
+   * The filter rail cannot describe its own options honestly without the
+   * difference.
+   */
+  detailsFetched: boolean;
   source: FilmSource;
 }

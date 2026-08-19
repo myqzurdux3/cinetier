@@ -35,6 +35,7 @@ function film(overrides: Partial<Film> & Pick<Film, 'id' | 'title'>): Film {
     runtimeMinutes: null,
     publicRating: null,
     posterPath: null,
+    detailsFetched: false,
     source: 'letterboxd',
     ...overrides,
   };

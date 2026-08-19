@@ -37,6 +37,7 @@ function film(id: string): Film {
     runtimeMinutes: null,
     publicRating: null,
     posterPath: null,
+    detailsFetched: false,
     source: 'imdb',
   };
 }

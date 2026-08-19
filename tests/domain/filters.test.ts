@@ -24,6 +24,7 @@ function film(overrides: Partial<Film> & Pick<Film, 'title'>): Film {
     runtimeMinutes: 120,
     publicRating: 70,
     posterPath: null,
+    detailsFetched: false,
     source: 'imdb',
     ...overrides,
   };
