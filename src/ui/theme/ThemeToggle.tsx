@@ -17,7 +17,7 @@ export function ThemeToggle() {
       // The label names the destination, not the current state: a control
       // labelled with what you already have tells you nothing about the click.
       aria-label={`Switch to the ${next.label} theme`}
-      className="rounded-full border border-line px-3 py-1 text-xs tracking-wide text-ink-dim transition-colors hover:border-accent hover:text-ink"
+      className="rounded-full border border-line px-3 py-1 text-xs tracking-wide text-ink-dim shadow-[var(--shadow-glow)] transition-colors hover:border-accent hover:text-ink"
     >
       {next.label}
     </button>

@@ -37,4 +37,12 @@ describe('ThemeToggle', () => {
     await userEvent.keyboard('{Enter}');
     expect(document.documentElement.dataset.theme).toBe('neon');
   });
+
+  it('carries the shared glow token, so neon can light it up without the component knowing', () => {
+    // --shadow-glow is `none` in the default theme and a real glow in neon;
+    // the component applies it unconditionally and the theme decides whether
+    // it shows. Pinning the class keeps the token from going dead again.
+    render(<ThemeToggle />);
+    expect(screen.getByRole('button')).toHaveClass('shadow-[var(--shadow-glow)]');
+  });
 });
