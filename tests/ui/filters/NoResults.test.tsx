@@ -22,9 +22,12 @@ describe('NoResults', () => {
     );
 
     // Dropping the rating bound admits two films; dropping the genre admits none.
-    expect(screen.getByText(/Rating 99 or more/)).toBeInTheDocument();
+    // Exact text, not a substring match: the button below now also reads
+    // "Remove Rating 99 or more" (Label in Name, WCAG 2.5.3), so a loose
+    // /Rating 99 or more/ match is ambiguous between the two elements.
+    expect(screen.getByText('Rating 99 or more is cutting the most.')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Remove filter: Rating 99 or more' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Rating 99 or more' }));
     expect(onChange).toHaveBeenCalledWith({ genres: ['Science fiction'] });
   });
 
@@ -38,7 +41,7 @@ describe('NoResults', () => {
     );
 
     expect(screen.getByText(/several are combining/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Remove filter/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument();
   });
 
   it('always offers to clear everything', async () => {

@@ -40,7 +40,10 @@ describe('FilterStatus', () => {
         onChange={vi.fn()}
       />,
     );
-    expect(container.querySelector('[aria-live="polite"]')).toHaveTextContent('1 of 3 titles');
+    // Reuse the node captured above, not a fresh query: identity is part of the
+    // contract, since a region that unmounts and remounts announces nothing to
+    // a screen reader even though a fresh querySelector would still find one.
+    expect(region).toHaveTextContent('1 of 3 titles');
   });
 
   it('shows one chip per active criterion, and none when nothing is set', () => {

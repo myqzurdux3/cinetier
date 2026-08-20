@@ -33,11 +33,10 @@ export function NoResults({ films, criteria, onChange }: NoResultsProps) {
           <p className="text-sm text-ink-dim">{description} is cutting the most.</p>
           <button
             type="button"
-            aria-label={`Remove filter: ${description}`}
             onClick={() => onChange(withoutCriterion(criteria, culprit))}
             className={ACTION}
           >
-            Remove it
+            Remove {description}
           </button>
         </>
       ) : (
