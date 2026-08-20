@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import App from '@/ui/App';
 import { loadLibrary, saveLibrary, clearLibrary } from '@/services/library';
 import { enrichLibrary, type EnrichProgress } from '@/enrich/enrichLibrary';
+import { loadFilters, saveFilters, clearFilters } from '@/services/filters';
+import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
 import type { Film } from '@/domain/film';
 
 vi.mock('@/services/library', () => ({
@@ -17,9 +19,20 @@ vi.mock('@/enrich/enrichLibrary', () => ({
   enrichLibrary: vi.fn(),
 }));
 
+vi.mock('@/services/filters', () => ({
+  loadFilters: vi.fn(),
+  saveFilters: vi.fn(),
+  clearFilters: vi.fn(),
+}));
+
+vi.mock('@/enrich/enrichDetails', () => ({
+  enrichDetails: vi.fn(),
+  countPendingDetails: vi.fn(),
+}));
+
 const imdbCsv = readFileSync('tests/fixtures/imdb-ratings.csv', 'utf8');
 
-function film(id: string): Film {
+function film(id: string, overrides: Partial<Film> = {}): Film {
   return {
     id,
     imdbId: null,
@@ -39,6 +52,7 @@ function film(id: string): Film {
     posterPath: null,
     detailsFetched: false,
     source: 'imdb',
+    ...overrides,
   };
 }
 
@@ -58,6 +72,16 @@ async function importFixture() {
   await userEvent.upload(input, new File([imdbCsv], 'ratings.csv', { type: 'text/csv' }));
 }
 
+// jsdom reports every element's size as 0, so @tanstack/react-virtual's
+// viewport measurement (offsetHeight/offsetWidth) sees an empty scroll
+// container and FilmGrid renders no rows at all — see tests/ui/FilmGrid.test.tsx
+// for the same stub. The new filter-rail tests below assert on film titles
+// that FilmGrid renders, so they need it here too.
+beforeEach(() => {
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 800 });
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 1200 });
+});
+
 beforeEach(() => {
   vi.mocked(loadLibrary).mockReset().mockResolvedValue(null);
   vi.mocked(saveLibrary).mockReset().mockResolvedValue(undefined);
@@ -65,6 +89,23 @@ beforeEach(() => {
   // Default: resolve immediately, passing films through unchanged, so tests
   // that don't care about enrichment timing don't have to manage it.
   vi.mocked(enrichLibrary)
+    .mockReset()
+    .mockImplementation(async (films, onProgress) => {
+      onProgress({ films, done: films.length, total: films.length });
+      return films;
+    });
+
+  // None of these tests starts filtered unless it says so explicitly.
+  vi.mocked(loadFilters).mockReset().mockResolvedValue(null);
+  vi.mocked(saveFilters).mockReset().mockResolvedValue(undefined);
+  vi.mocked(clearFilters).mockReset().mockResolvedValue(undefined);
+
+  // Default: nothing pending, so tests that don't care about the details pass
+  // don't have to manage it — every film() fixture carries tmdbId: null, which
+  // never needs details in the real pass either. Tests that want to see the
+  // pass run set this explicitly.
+  vi.mocked(countPendingDetails).mockReset().mockReturnValue(0);
+  vi.mocked(enrichDetails)
     .mockReset()
     .mockImplementation(async (films, onProgress) => {
       onProgress({ films, done: films.length, total: films.length });
@@ -310,5 +351,123 @@ describe('App enrichment races', () => {
     expect(screen.getByRole('button', { name: /import a different export/i })).toBeInTheDocument();
 
     consoleError.mockRestore();
+  });
+});
+
+describe('App filter rail', () => {
+  it('filters the grid by the restored criteria', async () => {
+    // Restored criteria have to reach the grid, not merely the rail: a rail
+    // that shows a filter the grid ignores is worse than no rail.
+    vi.mocked(loadLibrary).mockResolvedValue([
+      film('a', { title: 'Kept', rating: 90 }),
+      film('b', { title: 'Cut', rating: 10 }),
+    ]);
+    vi.mocked(loadFilters).mockResolvedValue({ minRating: 80 });
+
+    render(<App />);
+
+    expect(await screen.findByText('Kept')).toBeInTheDocument();
+    expect(screen.queryByText('Cut')).not.toBeInTheDocument();
+    expect(screen.getByText('1 of 2 titles')).toBeInTheDocument();
+  });
+
+  it('saves the criteria as they change', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
+    vi.mocked(loadFilters).mockResolvedValue(null);
+    render(<App />);
+    await screen.findByText('Kept');
+
+    fireEvent.change(screen.getByLabelText('Minimum rating'), { target: { value: '50' } });
+
+    await waitFor(() => {
+      expect(saveFilters).toHaveBeenCalledWith(expect.objectContaining({ minRating: 50 }));
+    });
+  });
+
+  it('forgets the criteria when the last one is cleared', async () => {
+    // Rather than persisting an empty object, which would restore as a
+    // filtered view that admits everything.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
+    vi.mocked(loadFilters).mockResolvedValue({ minRating: 80 });
+    render(<App />);
+    await screen.findByText('Kept');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
+
+    await waitFor(() => {
+      expect(clearFilters).toHaveBeenCalled();
+    });
+  });
+
+  it('shows the library when the criteria cannot be read at all', async () => {
+    // Private browsing, a blocked database, a failed upgrade. Losing a
+    // preference must not cost the page. Also asserts the rejection was
+    // actually caught (not merely harmless in this run): an unhandled
+    // rejection wouldn't fail this expectation, only the test file as a
+    // whole, which would point at the wrong line.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
+    vi.mocked(loadFilters).mockRejectedValue(new Error('storage is blocked'));
+
+    render(<App />);
+
+    expect(await screen.findByText('Kept')).toBeInTheDocument();
+    await waitFor(() => expect(consoleError).toHaveBeenCalled());
+
+    consoleError.mockRestore();
+  });
+
+  it('explains an empty result instead of showing an empty grid', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 10 })]);
+    vi.mocked(loadFilters).mockResolvedValue({ minRating: 90 });
+
+    render(<App />);
+
+    expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument();
+  });
+
+  it('does not show the empty-library explainer for a genuinely empty library', async () => {
+    // Distinct from the case above: no criterion is active, so `visible` is
+    // empty because the library itself is, not because a filter cut it. The
+    // rail's "Nothing matches these filters" message would be the wrong
+    // explanation, and its "Clear all filters" button would clear nothing.
+    vi.mocked(loadLibrary).mockResolvedValue([]);
+    vi.mocked(loadFilters).mockResolvedValue(null);
+
+    render(<App />);
+
+    await waitFor(() => expect(loadLibrary).toHaveBeenCalled());
+    expect(screen.queryByText('Nothing matches these filters.')).not.toBeInTheDocument();
+  });
+
+  it('never shows two buttons named "Clear all filters" at once', async () => {
+    // FilterStatus's own clear-all chip and NoResults's clear-all button are
+    // both accessible-name "Clear all filters". If both mounted at once,
+    // `getByRole('button', { name: 'Clear all filters' })` — used by "forgets
+    // the criteria when the last one is cleared" above — would throw on an
+    // ambiguous match.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 10 })]);
+    vi.mocked(loadFilters).mockResolvedValue({ minRating: 90 });
+
+    render(<App />);
+    await screen.findByText('Nothing matches these filters.');
+
+    expect(screen.getAllByRole('button', { name: 'Clear all filters' })).toHaveLength(1);
+  });
+
+  it('runs the details pass over a restored library', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
+    vi.mocked(loadFilters).mockResolvedValue(null);
+    // Simulates a record with pending details — every film() fixture has
+    // tmdbId: null, which the real countPendingDetails would treat as never
+    // pending, so this is overridden here rather than in the shared default.
+    vi.mocked(countPendingDetails).mockReturnValue(1);
+
+    render(<App />);
+    await screen.findByText('Kept');
+
+    await waitFor(() => {
+      expect(enrichDetails).toHaveBeenCalled();
+    });
   });
 });
