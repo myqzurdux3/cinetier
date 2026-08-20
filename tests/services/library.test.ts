@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
+import { openDB, type DBSchema } from 'idb';
 import { saveLibrary, loadLibrary, clearLibrary } from '@/services/library';
-import { resetDatabase } from '@/services/db';
+import { db, resetDatabase } from '@/services/db';
 import type { Film } from '@/domain/film';
 
 function film(id: string, watchedAt: Date | null = null): Film {
@@ -60,5 +61,42 @@ describe('library persistence', () => {
     await saveLibrary([film('a')]);
     await clearLibrary();
     expect(await loadLibrary()).toBeNull();
+  });
+});
+
+// v1 shipped with only the 'tmdb' and 'library' stores, at version 1 — see
+// `git show 3db0066~1:src/services/db.ts`. This reproduces that shape by hand,
+// bypassing the current `db()` entirely, so the upgrade below runs for real
+// instead of starting from a database `db()` already created at version 2.
+interface CinetierV1Schema extends DBSchema {
+  tmdb: { key: string; value: { match: unknown; fetchedAt: number } };
+  library: { key: string; value: { films: Film[]; savedAt: number } };
+}
+
+describe('the v1 to v2 schema upgrade', () => {
+  it('keeps an existing library intact when filters and tmdbDetails are added', async () => {
+    const v1 = await openDB<CinetierV1Schema>('cinetier', 1, {
+      upgrade(database) {
+        database.createObjectStore('tmdb');
+        database.createObjectStore('library');
+      },
+    });
+    const saved = { films: [film('a'), film('b')], savedAt: Date.now() };
+    await v1.put('library', saved, 'current');
+    v1.close();
+
+    const upgraded = await db();
+
+    expect(upgraded.version).toBe(2);
+    expect(Array.from(upgraded.objectStoreNames).sort()).toEqual([
+      'filters',
+      'library',
+      'tmdb',
+      'tmdbDetails',
+    ]);
+
+    const restored = await upgraded.get('library', 'current');
+    expect(restored?.films.map((f) => f.id)).toEqual(['a', 'b']);
+    expect(restored?.savedAt).toBe(saved.savedAt);
   });
 });
