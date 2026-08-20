@@ -57,7 +57,10 @@ export default function App() {
   useEffect(() => {
     loadFilters()
       .then((restored) => {
-        if (restored) setCriteria(restored);
+        // Mirrors the library restore's own guard: a user who has already
+        // imported or reset wins over a filters restore that is merely slow,
+        // not the other way around.
+        if (restored && !restoreCancelled.current) setCriteria(restored);
       })
       .catch((error: unknown) => {
         // A lost preference costs a click. Letting it propagate would cost the page.
@@ -100,7 +103,12 @@ export default function App() {
         if (!restored || restoreCancelled.current) return;
         setFilms(restored);
         const id = ++runId.current;
-        return fillInDetails(restored, id);
+        // Given its own catch, separate from the one below: a failure here is
+        // "the details pass on a restored library failed", not "the restore
+        // itself failed" — the library still restored fine.
+        fillInDetails(restored, id).catch((error: unknown) => {
+          console.error('Failed to fetch details for the restored library', error);
+        });
       })
       .catch((error: unknown) => {
         console.error('Failed to restore the saved library', error);
@@ -199,19 +207,21 @@ export default function App() {
             </aside>
 
             <div className="min-w-0 flex-1 space-y-3">
-              {/* FilterStatus's own "Clear all filters" chip and NoResults's
-                  button share that exact accessible name. Showing FilterStatus
-                  only while something is visible keeps the two from ever
-                  mounting together, so neither query nor screen reader user
-                  meets two buttons with the same name at once. */}
-              {!filtered && (
-                <FilterStatus
-                  films={films}
-                  visible={visible}
-                  criteria={criteria}
-                  onChange={updateCriteria}
-                />
-              )}
+              {/* Always mounted — see FilterStatus's own comment on its live
+                  region: unmounting it at exactly the moment results drop to
+                  zero would silence the one announcement it exists to make.
+                  Its own "Clear all filters" button is suppressed instead,
+                  since NoResults renders an equivalent one of its own while
+                  results are zero — the two must never coexist under the
+                  same accessible name, but the live region must never stop
+                  existing. */}
+              <FilterStatus
+                films={films}
+                visible={visible}
+                criteria={criteria}
+                onChange={updateCriteria}
+                showClearAll={!filtered}
+              />
               {filtered ? (
                 <NoResults films={films} criteria={criteria} onChange={updateCriteria} />
               ) : (

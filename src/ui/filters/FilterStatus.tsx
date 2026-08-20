@@ -11,12 +11,27 @@ interface FilterStatusProps {
   visible: Film[];
   criteria: FilterCriteria;
   onChange: (next: FilterCriteria) => void;
+  /**
+   * False while some other element on the page — currently NoResults, when
+   * there are zero visible films — is already offering its own "Clear all
+   * filters" button. Whether that's true depends on what else the caller is
+   * rendering beside this component, which this component cannot see, so the
+   * caller says so explicitly rather than this inferring it from `visible`.
+   * Defaults to true: shown whenever a criterion is active, as before.
+   */
+  showClearAll?: boolean;
 }
 
 const CHIP =
   'rounded-card border border-line px-2 py-1 text-xs text-ink-dim hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent';
 
-export function FilterStatus({ films, visible, criteria, onChange }: FilterStatusProps) {
+export function FilterStatus({
+  films,
+  visible,
+  criteria,
+  onChange,
+  showClearAll = true,
+}: FilterStatusProps) {
   const active = activeCriteria(criteria);
 
   return (
@@ -42,7 +57,7 @@ export function FilterStatus({ films, visible, criteria, onChange }: FilterStatu
         );
       })}
 
-      {active.length > 0 && (
+      {active.length > 0 && showClearAll && (
         <button type="button" onClick={() => onChange({})} className={CHIP}>
           Clear all filters
         </button>

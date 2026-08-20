@@ -96,4 +96,25 @@ describe('FilterStatus', () => {
 
     expect(onChange).toHaveBeenCalledWith({});
   });
+
+  it('suppresses its own clear-all button when told to, even with active criteria', () => {
+    // A caller (App) shows this alongside NoResults, which offers an
+    // equivalent "Clear all filters" button of its own while results are
+    // zero — the two must never coexist under the same accessible name.
+    render(
+      <FilterStatus
+        films={library}
+        visible={[]}
+        criteria={{ minRating: 80 }}
+        onChange={vi.fn()}
+        showClearAll={false}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Clear all filters' })).not.toBeInTheDocument();
+    // The rest of the status bar — count and chips — still appears; only the
+    // clear-all button is suppressed.
+    expect(screen.getByText('0 of 3 titles')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Remove filter/ })).toBeInTheDocument();
+  });
 });

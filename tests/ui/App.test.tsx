@@ -6,6 +6,7 @@ import App from '@/ui/App';
 import { loadLibrary, saveLibrary, clearLibrary } from '@/services/library';
 import { enrichLibrary, type EnrichProgress } from '@/enrich/enrichLibrary';
 import { loadFilters, saveFilters, clearFilters } from '@/services/filters';
+import type { FilterCriteria } from '@/domain/filters';
 import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
 import type { Film } from '@/domain/film';
 
@@ -367,7 +368,11 @@ describe('App filter rail', () => {
     render(<App />);
 
     expect(await screen.findByText('Kept')).toBeInTheDocument();
-    expect(screen.queryByText('Cut')).not.toBeInTheDocument();
+    // Both the loadFilters and loadLibrary restores are async, and nothing
+    // guarantees which settles first — assert this like any other eventual
+    // state, not as a synchronous fact that merely happens to hold today
+    // because of effect declaration order.
+    await waitFor(() => expect(screen.queryByText('Cut')).not.toBeInTheDocument());
     expect(screen.getByText('1 of 2 titles')).toBeInTheDocument();
   });
 
@@ -417,6 +422,27 @@ describe('App filter rail', () => {
     consoleError.mockRestore();
   });
 
+  it('does not reinstate criteria from a filters restore that resolves after an import wins', async () => {
+    // Mirrors "does not let a stale restore repopulate the screen after a
+    // reset" for the library restore below: the filters restore has the
+    // identical failure mode (a slow promise outliving the action that
+    // should pre-empt it) and needs the identical restoreCancelled guard.
+    const filtersDeferred = deferred<FilterCriteria | null>();
+    vi.mocked(loadFilters).mockReturnValue(filtersDeferred.promise);
+
+    render(<App />);
+    await importFixture();
+    await screen.findByRole('button', { name: /import a different export/i });
+
+    // The stale restore now resolves with criteria that would exclude
+    // everything the user just imported, if it were allowed to apply.
+    filtersDeferred.resolve({ minRating: 999 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByText('Nothing matches these filters.')).not.toBeInTheDocument();
+  });
+
   it('explains an empty result instead of showing an empty grid', async () => {
     vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 10 })]);
     vi.mocked(loadFilters).mockResolvedValue({ minRating: 90 });
@@ -436,24 +462,46 @@ describe('App filter rail', () => {
 
     render(<App />);
 
-    await waitFor(() => expect(loadLibrary).toHaveBeenCalled());
+    // A positive marker that the library screen actually rendered — not
+    // merely that loadLibrary was called, which is satisfied the instant the
+    // effect fires and says nothing about what ended up on screen.
+    await screen.findByRole('button', { name: /import a different export/i });
     expect(screen.queryByText('Nothing matches these filters.')).not.toBeInTheDocument();
   });
 
-  it('never shows two buttons named "Clear all filters" at once', async () => {
-    // FilterStatus's own clear-all chip and NoResults's clear-all button are
-    // both accessible-name "Clear all filters". If both mounted at once,
-    // `getByRole('button', { name: 'Clear all filters' })` — used by "forgets
-    // the criteria when the last one is cleared" above — would throw on an
-    // ambiguous match.
-    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 10 })]);
-    vi.mocked(loadFilters).mockResolvedValue({ minRating: 90 });
+  it(
+    'never shows two buttons named "Clear all filters" at once, and keeps announcing ' +
+      'the count when results drop to zero',
+    async () => {
+      // FilterStatus's own clear-all chip and NoResults's clear-all button
+      // are both accessible-name "Clear all filters" — if both mounted at
+      // once, `getByRole('button', { name: 'Clear all filters' })`, used by
+      // "forgets the criteria when the last one is cleared" above, would
+      // throw on an ambiguous match. FilterStatus itself, though, must never
+      // unmount over this transition: its live region is what announces the
+      // count dropping to zero, and an unmount-remount announces nothing to
+      // a screen reader even though a fresh query would still find a node.
+      vi.mocked(loadLibrary).mockResolvedValue([
+        film('a', { title: 'Kept', rating: 90 }),
+        film('b', { title: 'Cut', rating: 10 }),
+      ]);
+      vi.mocked(loadFilters).mockResolvedValue(null);
 
-    render(<App />);
-    await screen.findByText('Nothing matches these filters.');
+      render(<App />);
+      await screen.findByText('Kept');
 
-    expect(screen.getAllByRole('button', { name: 'Clear all filters' })).toHaveLength(1);
-  });
+      // Captured once, reused below rather than re-queried — identity is
+      // part of the contract, the same as FilterStatus's own unit test.
+      const region = screen.getByText('2 of 2 titles');
+
+      fireEvent.change(screen.getByLabelText('Minimum rating'), { target: { value: '95' } });
+
+      await screen.findByText('Nothing matches these filters.');
+      expect(region).toBeInTheDocument();
+      expect(region).toHaveTextContent('0 of 2 titles');
+      expect(screen.getAllByRole('button', { name: 'Clear all filters' })).toHaveLength(1);
+    },
+  );
 
   it('runs the details pass over a restored library', async () => {
     vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
@@ -469,5 +517,49 @@ describe('App filter rail', () => {
     await waitFor(() => {
       expect(enrichDetails).toHaveBeenCalled();
     });
+  });
+
+  it('runs the details pass over a freshly imported library, using what enrichment produced', async () => {
+    // Pins the ordering this pass documents for itself: details run after
+    // the poster pass, over its output — not beside it, and not over the
+    // raw parsed import.
+    const enriched = [film('with-poster', { title: 'Heat', posterPath: '/heat.jpg' })];
+    vi.mocked(enrichLibrary).mockImplementation(async (_films, onProgress) => {
+      onProgress({ films: enriched, done: enriched.length, total: enriched.length });
+      return enriched;
+    });
+    vi.mocked(countPendingDetails).mockReturnValue(1);
+
+    render(<App />);
+    await importFixture();
+
+    await waitFor(() => expect(enrichDetails).toHaveBeenCalled());
+    expect(vi.mocked(enrichDetails).mock.calls[0]![0]).toBe(enriched);
+  });
+
+  it('logs a failed details pass on a restored library separately from a failed restore', async () => {
+    // The restore itself succeeded — the library is on screen. Only the
+    // second pass over it failed, and the message should say so rather than
+    // implicating the restore that worked fine.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
+    vi.mocked(countPendingDetails).mockReturnValue(1);
+    vi.mocked(enrichDetails).mockRejectedValue(new Error('TMDB is unreachable'));
+
+    render(<App />);
+    await screen.findByText('Kept');
+
+    await waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        'Failed to fetch details for the restored library',
+        expect.any(Error),
+      );
+    });
+    expect(consoleError).not.toHaveBeenCalledWith(
+      'Failed to restore the saved library',
+      expect.anything(),
+    );
+
+    consoleError.mockRestore();
   });
 });
