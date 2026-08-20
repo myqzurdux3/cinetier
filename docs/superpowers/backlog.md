@@ -33,14 +33,19 @@ catalogue is TMDB-derived, so the realistic exposure is records with no year.
 Worth considering in the next plan: record match provenance — an exact `find` by IMDb id
 versus a fuzzy `search` — and union only on identifiers that came from an exact match.
 
-### Letterboxd films have no genres, directors or runtimes
+### ~~Letterboxd films have no genres, directors or runtimes~~
 
-TMDB's search and find endpoints return neither, so filling them needs a second request per
-film. That was deferred because only the filter rail consumes them.
+~~TMDB's search and find endpoints return neither, so filling them needs a second request per
+film. That was deferred because only the filter rail consumes them.~~
 
-**The filter rail is next plan's scope, so that plan must schedule the fetch** — otherwise
+~~**The filter rail is next plan's scope, so that plan must schedule the fetch** — otherwise
 genre, director and runtime filters silently offer fewer options for Letterboxd-sourced
-films than for IMDb ones, which reads as a bug rather than a limitation.
+films than for IMDb ones, which reads as a bug rather than a limitation.~~
+
+Closed by the filter-rail plan (2026-08-20): a second TMDB request per film, made after
+posters, fills in genres, directors and runtimes for every source. Verified by hand against
+a real Letterboxd export carrying no genres at all — it came back filterable by genre,
+alongside the rest.
 
 ### Two same-title, same-year films can still merge
 
@@ -48,6 +53,18 @@ If two genuinely distinct films share an exact title and release year, and a thi
 links them, they collapse into one. Enrichment narrows this considerably by supplying
 identifiers, but does not eliminate it. Accepted: the specification's fallback rule is
 title plus year, and this is the stated cost of that rule.
+
+### No year range, only decades
+
+`FilterCriteria` has no `minYear`/`maxYear`, and translating a range into decades answers a
+different question. A later plan can add the axis.
+
+### `App.tsx` stays as it is, deliberately
+
+At 197 lines, with five state pieces, two restore effects and two enrichment passes,
+`App.tsx` is the file the filter-rail plan's reviews looked at hardest. Two reviewers
+independently judged it should not be restructured now; the seam that will eventually want
+extracting is the pair of persistence effects and their writers, not the render tree.
 
 ## Robustness
 
@@ -68,6 +85,16 @@ title plus year, and this is the stated cost of that rule.
   flows through optional chaining into nulls — but it could produce a record that violates
   its own declared type. Worst case today is a broken image.
 - **`imdbId` is interpolated into the TMDB URL path unencoded**, unlike the title.
+- **A failed detail lookup is cached as "TMDB had nothing"** for thirty days, the
+  same rule the poster cache follows. A title that failed because the network
+  dropped will not be asked about again for a month.
+- **Episodes never get details.** `lookupByImdbId` reads `movie_results` and
+  `tv_results` only, so an imported episode carries no `tmdbId` and the pass
+  skips it.
+- **`reset()` does not reset `railOpen`**, and calls `clearFilters()` unconditionally even
+  when nothing was ever saved.
+- **`NoResults.tsx`'s `culprit && description` is a redundant double guard** —
+  `description` is non-null exactly when `culprit` is.
 
 ## Performance
 
@@ -75,6 +102,18 @@ title plus year, and this is the stated cost of that rule.
   5000 array copies and 5000 React commits. The specification's risk table names libraries
   of that size. Batching progress — every N films, or on an animation frame — is the cheap
   fix.
+- **The details pass doubles the request count.** Measured on a 6-film Letterboxd import — the
+  largest export available for this check has 7 rows — the second pass (6 detail requests)
+  took 277 ms, following 142 ms for the 6 poster lookups that precede it. At the worker pool's
+  6-way concurrency that is roughly one batch, so about 277 ms per batch of six.
+  Extrapolated — not measured — to the specification's 800-film case: roughly 134 batches, on
+  the order of 35-40 seconds. Treat that figure as an extrapolation from six titles, not a
+  measurement at scale.
+- **The rail runs eight `applyFilters` passes per render, with no memoisation, and each
+  `*Controls` component recomputes its option list on every keystroke.** Fine at export
+  scale — a 5000-film library still does only eight full passes per change — so this is a
+  known trade-off, not an oversight. Memoizing per section is the cheap fix if it is ever
+  felt.
 - ~~**The grid is fixed at six columns** regardless of viewport, so a phone renders six very
   small posters per row.~~ Superseded, then closed: the grid briefly defaulted to a fixed 8
   columns under the visual-identity plan, and the whole-branch review fix pass (2026-08-19)
@@ -93,6 +132,8 @@ title plus year, and this is the stated cost of that rule.
   the duration.
 - **The screen-reader status duplicates the visible line verbatim**, so someone reading the
   region afterwards meets the same sentence twice.
+- **Removing a criterion unmounts the focused button.** Focus falls to `<body>`; nothing
+  moves it to a stable neighbour.
 
 ## Testing and tooling
 
@@ -108,6 +149,17 @@ title plus year, and this is the stated cost of that rule.
   possible once the library screen shipped.
 - **CI actions target a deprecated runner.** `actions/checkout@v4` and `setup-node@v4` warn;
   a bump to `@v5` clears it.
+- **`tests/ui/App.test.tsx` restores its `console.error` spy without `try/finally` in two
+  places**, so a `waitFor` timeout would leak the spy into later tests in that file.
+- **A transient "Unhandled Errors" block attributed to `tests/ui/FilmGrid.test.tsx` appeared
+  in 1 of 9 full-suite runs during the filter-rail plan.** A re-review established nothing in
+  the filter-rail work can produce it — that file does not render `App` — so it is
+  pre-existing and unexplained. Worth a proper look.
+- **The responsive layout below `lg` and the disabled-while-fetching sections remain
+  unverified by hand.** The automated browser tab reports `visibilityState: "hidden"`, so
+  `requestAnimationFrame` never fires and `ResizeObserver` never reports; and on the 6-film
+  import used to check it, the details pass finished in 277 ms — too fast to observe
+  mid-flight. Both need a real resized window, and a slower or larger import, respectively.
 
 ## Closed on 2026-08-19, from a real user import
 
