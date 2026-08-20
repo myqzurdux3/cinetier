@@ -29,7 +29,14 @@ interface SectionSpec {
   Controls: (props: ControlsProps) => ReactNode;
 }
 
-const SECTIONS: readonly SectionSpec[] = [
+/**
+ * Exported so a test can prove every criterion has a home: the array itself
+ * carries no such guarantee (unlike CRITERION_ORDER, its `keys` are plain
+ * `readonly CriterionKey[]`, not `exhaustive`-checked), so a criterion
+ * omitted here compiles fine and would otherwise vanish silently from every
+ * section's own count.
+ */
+export const SECTIONS: readonly SectionSpec[] = [
   {
     title: 'Rating',
     keys: ['minRating', 'maxRating', 'onlyUnrated', 'minRatingDelta', 'maxRatingDelta'],

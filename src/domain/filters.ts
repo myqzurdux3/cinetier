@@ -142,12 +142,33 @@ export function runtimeBounds(films: Film[]): { min: number; max: number } | nul
 export type CriterionKey = keyof FilterCriteria;
 
 /**
+ * Wraps an array literal with a compile-time proof that it names every
+ * member of T at least once. Passing an array missing a member fails to
+ * typecheck at the call site — the expected parameter type becomes
+ * `{ missing: ... }`, naming exactly what's absent — instead of compiling
+ * silently and letting that member vanish from whatever the array drives.
+ */
+function exhaustive<T extends string>() {
+  return function <const Keys extends readonly T[]>(
+    keys: Exclude<T, Keys[number]> extends never ? Keys : { missing: Exclude<T, Keys[number]> },
+  ): Keys {
+    return keys as Keys;
+  };
+}
+
+/**
  * Every criterion, in a deliberately curated presentation order (not
  * FilterCriteria's declaration order). Chips follow it, and
  * mostRestrictiveCriterion breaks ties with it, so two libraries in the same
  * state always produce the same words in the same order.
+ *
+ * Exported, and wrapped in `exhaustive`, so a criterion added to
+ * FilterCriteria without also being added here fails to build rather than
+ * silently dropping out of activeCriteria, chip ordering, and — via the
+ * filter rail's own section-completeness check, which treats this list as
+ * the full criterion set — out of the rail entirely.
  */
-const CRITERION_ORDER: readonly CriterionKey[] = [
+export const CRITERION_ORDER = exhaustive<CriterionKey>()([
   'titleTypes',
   'decades',
   'minRating',
@@ -163,7 +184,7 @@ const CRITERION_ORDER: readonly CriterionKey[] = [
   'watchedBefore',
   'onlyRewatches',
   'topN',
-];
+]);
 
 /**
  * Whether a criterion is actually filtering anything.
