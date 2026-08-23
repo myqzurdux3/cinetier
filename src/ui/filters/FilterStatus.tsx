@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import {
   activeCriteria,
   describeCriterion,
@@ -5,6 +6,12 @@ import {
   type FilterCriteria,
 } from '@/domain/filters';
 import type { Film } from '@/domain/film';
+
+/**
+ * Shared with NoResults, which lives in a different component but removes
+ * criteria the same way — see the focus-management comment below.
+ */
+export const FILTER_STATUS_ID = 'filter-status';
 
 interface FilterStatusProps {
   films: Film[];
@@ -33,9 +40,29 @@ export function FilterStatus({
   showClearAll = true,
 }: FilterStatusProps) {
   const active = activeCriteria(criteria);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Every removal here unmounts the very button the user just activated — a
+   * chip, or the clear-all button. Left alone, focus falls to <body>, which
+   * strands a keyboard user at the top of the document on the rail's most
+   * common interaction. This wrapper is always mounted (see the live
+   * region's own comment below), so it is a stable place to send focus
+   * instead: `tabIndex={-1}` makes it focusable programmatically without
+   * adding a stop to the Tab order.
+   */
+  function removeAndRefocus(next: FilterCriteria) {
+    onChange(next);
+    containerRef.current?.focus();
+  }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div
+      ref={containerRef}
+      id={FILTER_STATUS_ID}
+      tabIndex={-1}
+      className="flex flex-wrap items-center gap-2 rounded-card focus:outline-none focus:ring-2 focus:ring-accent"
+    >
       {/* Always mounted, never conditionally rendered: a live region that
           appears at the same moment as its message is routinely missed. */}
       <p aria-live="polite" className="text-sm text-ink">
@@ -49,7 +76,7 @@ export function FilterStatus({
             key={key}
             type="button"
             aria-label={`Remove filter: ${description}`}
-            onClick={() => onChange(withoutCriterion(criteria, key))}
+            onClick={() => removeAndRefocus(withoutCriterion(criteria, key))}
             className={CHIP}
           >
             {description} <span aria-hidden="true">×</span>
@@ -58,7 +85,7 @@ export function FilterStatus({
       })}
 
       {active.length > 0 && showClearAll && (
-        <button type="button" onClick={() => onChange({})} className={CHIP}>
+        <button type="button" onClick={() => removeAndRefocus({})} className={CHIP}>
           Clear all filters
         </button>
       )}

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { FilterStatus } from '@/ui/filters/FilterStatus';
+import { FilterStatus, FILTER_STATUS_ID } from '@/ui/filters/FilterStatus';
 import { makeFilm } from '../../support/film';
 
 const library = [
@@ -95,6 +95,43 @@ describe('FilterStatus', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
 
     expect(onChange).toHaveBeenCalledWith({});
+  });
+
+  it('moves focus to its own wrapper, not <body>, when a chip removes itself', async () => {
+    // The button the user just activated unmounts along with the criterion it
+    // named. Left alone, focus falls to <body> — the rail's most common
+    // interaction, for a keyboard user. FilterStatus's own wrapper is always
+    // mounted (see the always-mounted comment on the live region above), so
+    // it is a stable, sensible landing spot.
+    render(
+      <FilterStatus
+        films={library}
+        visible={library}
+        criteria={{ minRating: 80, genres: ['Crime'] }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove filter: Genre: Crime' }));
+
+    expect(document.activeElement).toBe(document.getElementById(FILTER_STATUS_ID));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('moves focus to its own wrapper, not <body>, when clear-all removes itself', async () => {
+    render(
+      <FilterStatus
+        films={library}
+        visible={library}
+        criteria={{ minRating: 80 }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
+
+    expect(document.activeElement).toBe(document.getElementById(FILTER_STATUS_ID));
+    expect(document.activeElement).not.toBe(document.body);
   });
 
   it('suppresses its own clear-all button when told to, even with active criteria', () => {

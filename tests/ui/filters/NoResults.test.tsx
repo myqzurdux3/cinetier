@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NoResults } from '@/ui/filters/NoResults';
+import { FilterStatus, FILTER_STATUS_ID } from '@/ui/filters/FilterStatus';
 import { makeFilm } from '../../support/film';
 
 const library = [
@@ -50,5 +51,54 @@ describe('NoResults', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
     expect(onChange).toHaveBeenCalledWith({});
+  });
+
+  // NoResults's own culprit-removal button unmounts along with the criterion
+  // it names, usually taking NoResults itself with it as soon as results stop
+  // being zero — so, unlike FilterStatus, it cannot refocus something inside
+  // itself. FilterStatus's wrapper is mounted alongside it in the real app
+  // (App.tsx renders both together, exactly as here) and never unmounts
+  // across this transition, which is what makes it the sensible shared
+  // target for both components' removal paths.
+  it('moves focus to the always-mounted filter status region, not <body>, when the culprit is removed', async () => {
+    const criteria = { minRating: 99, genres: ['Science fiction'] };
+    render(
+      <>
+        <FilterStatus
+          films={library}
+          visible={[]}
+          criteria={criteria}
+          onChange={vi.fn()}
+          showClearAll={false}
+        />
+        <NoResults films={library} criteria={criteria} onChange={vi.fn()} />
+      </>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Rating 99 or more' }));
+
+    expect(document.activeElement).toBe(document.getElementById(FILTER_STATUS_ID));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('moves focus to the always-mounted filter status region, not <body>, when clear-all is used', async () => {
+    const criteria = { minRating: 99 };
+    render(
+      <>
+        <FilterStatus
+          films={library}
+          visible={[]}
+          criteria={criteria}
+          onChange={vi.fn()}
+          showClearAll={false}
+        />
+        <NoResults films={library} criteria={criteria} onChange={vi.fn()} />
+      </>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
+
+    expect(document.activeElement).toBe(document.getElementById(FILTER_STATUS_ID));
+    expect(document.activeElement).not.toBe(document.body);
   });
 });

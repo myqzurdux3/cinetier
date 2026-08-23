@@ -5,6 +5,7 @@ import {
   type FilterCriteria,
 } from '@/domain/filters';
 import type { Film } from '@/domain/film';
+import { FILTER_STATUS_ID } from './FilterStatus';
 
 interface NoResultsProps {
   films: Film[];
@@ -24,6 +25,21 @@ export function NoResults({ films, criteria, onChange }: NoResultsProps) {
   const culprit = mostRestrictiveCriterion(films, criteria);
   const description = culprit ? describeCriterion(culprit, criteria) : null;
 
+  /**
+   * Removing a criterion here almost always brings results back, which
+   * unmounts NoResults itself along with whichever button the user just
+   * activated — a harder version of the problem FilterStatus's own chips
+   * have, since there is no button of NoResults's own left standing to hand
+   * focus to. FilterStatus's status region is mounted alongside this
+   * component in every real render (App.tsx always renders both) and never
+   * unmounts across this transition, so it is the shared, stable target both
+   * components send focus to rather than leaving it to fall to <body>.
+   */
+  function removeAndRefocus(next: FilterCriteria) {
+    onChange(next);
+    document.getElementById(FILTER_STATUS_ID)?.focus();
+  }
+
   return (
     <div className="space-y-3 rounded-card bg-surface px-5 py-10 text-center">
       <p className="font-display text-lg text-ink">Nothing matches these filters.</p>
@@ -33,7 +49,7 @@ export function NoResults({ films, criteria, onChange }: NoResultsProps) {
           <p className="text-sm text-ink-dim">{description} is cutting the most.</p>
           <button
             type="button"
-            onClick={() => onChange(withoutCriterion(criteria, culprit))}
+            onClick={() => removeAndRefocus(withoutCriterion(criteria, culprit))}
             className={ACTION}
           >
             Remove {description}
@@ -46,7 +62,7 @@ export function NoResults({ films, criteria, onChange }: NoResultsProps) {
       )}
 
       <div>
-        <button type="button" onClick={() => onChange({})} className={ACTION}>
+        <button type="button" onClick={() => removeAndRefocus({})} className={ACTION}>
           Clear all filters
         </button>
       </div>
