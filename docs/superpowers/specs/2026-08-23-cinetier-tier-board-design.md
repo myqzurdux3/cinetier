@@ -1,7 +1,7 @@
 # Cinetier tier board — design
 
 **Date:** 2026-08-23
-**Status:** written, awaiting review
+**Status:** approved 2026-08-23, awaiting implementation plan
 **Extends** `2026-08-18-cinetier-design.md` (data, parsing, privacy),
 `2026-08-19-cinetier-visual-identity-design.md` (tokens, themes, typography),
 and `2026-08-19-cinetier-filter-rail-design.md` (the rail this board sits beside).
