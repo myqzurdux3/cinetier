@@ -13,6 +13,7 @@ import type { Film } from '@/domain/film';
 import type { TierBoard } from '@/domain/tiers';
 import type { BoardAction } from '@/domain/board';
 import { TierRow } from './TierRow';
+import { TierRowControls } from './TierRowControls';
 import { Pool } from './Pool';
 import { destinationFor, type DropTarget } from './dropTarget';
 import { boardAnnouncements, type ItemDescription } from './announcements';
@@ -90,14 +91,21 @@ export function BoardScreen({
     >
       <div className="space-y-4">
         <div className="space-y-2">
-          {board.tiers.map((tier) => (
+          {board.tiers.map((tier, index) => (
             <TierRow
               key={tier.id}
               tier={tier}
               films={(board.placements[tier.id] ?? [])
                 .map((id) => byId.get(id))
                 .filter((film): film is Film => film !== undefined)}
-            />
+            >
+              <TierRowControls
+                tier={tier}
+                index={index}
+                tierCount={board.tiers.length}
+                dispatch={dispatch}
+              />
+            </TierRow>
           ))}
         </div>
 
