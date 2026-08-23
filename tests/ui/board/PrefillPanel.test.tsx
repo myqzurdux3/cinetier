@@ -8,6 +8,7 @@ import { makeFilm } from '../../support/film';
 const heat = makeFilm({ title: 'Heat', rating: 95 });
 const dune = makeFilm({ title: 'Dune', rating: 82 });
 const unrated = makeFilm({ title: 'Unrated', rating: null });
+const unrated2 = makeFilm({ title: 'Unrated2', rating: null });
 const films = [heat, dune, unrated];
 
 function renderPanel(overrides: Partial<Parameters<typeof PrefillPanel>[0]> = {}) {
@@ -51,6 +52,20 @@ describe('PrefillPanel', () => {
   it('says how many films it will not place at all', () => {
     renderPanel();
     expect(screen.getByText(/1 unrated film stays in the pool/i)).toBeInTheDocument();
+  });
+
+  it('stops counting an unrated film once it is hand-placed, since it has left the pool', () => {
+    // The message is about what the pool holds, not about the library as a
+    // whole — a film pulled out of the pool by hand is no longer "staying"
+    // anywhere, so it must drop out of this count too.
+    const placed = moveFilm(createBoard('b1', 'Mine'), unrated.id, { tierId: 'F', index: 0 });
+    renderPanel({ board: placed });
+    expect(screen.queryByText(/unrated film/i)).not.toBeInTheDocument();
+  });
+
+  it('pluralizes the count when more than one unrated film is pooled', () => {
+    renderPanel({ films: [heat, dune, unrated, unrated2] });
+    expect(screen.getByText(/2 unrated films stay in the pool/i)).toBeInTheDocument();
   });
 
   it('changing a threshold dispatches, and does not pre-fill by itself', () => {
