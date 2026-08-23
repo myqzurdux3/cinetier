@@ -44,6 +44,27 @@ function emptyPlacements(tiers: Tier[]): Record<string, string[]> {
   return Object.fromEntries(tiers.map((tier) => [tier.id, []]));
 }
 
+/**
+ * Whether two placement maps hold the same rows in the same order.
+ *
+ * This exists so an operation that changes nothing can return its input
+ * *reference*: App's undo history skips recording when the reducer hands back
+ * the board it was given, and that guard only bites if the operations are
+ * honest about doing nothing. Comparing here rather than in the UI keeps the
+ * cost where the work already is — every caller below has just walked the same
+ * placements once, so this walk is the same order of magnitude, not a new one.
+ */
+function samePlacements(a: Record<string, string[]>, b: Record<string, string[]>): boolean {
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => {
+    const left = a[key];
+    const right = b[key];
+    if (left === undefined || right === undefined) return false;
+    return left.length === right.length && left.every((id, index) => id === right[index]);
+  });
+}
+
 export function createBoard(id: string, name: string, tiers: Tier[] = DEFAULT_TIERS): TierBoard {
   return { id, name, tiers, placements: emptyPlacements(tiers) };
 }
@@ -85,6 +106,11 @@ export function moveFilm(board: TierBoard, filmId: string, to: Destination): Tie
     placements[to.tierId] = target;
   }
 
+  // Dropping a film back exactly where it already was is a real gesture — a
+  // drag that travels and returns, or the keyboard's first arrow press before
+  // the fix above — and it must not become an undo step.
+  if (samePlacements(board.placements, placements)) return board;
+
   return { ...board, placements };
 }
 
@@ -116,5 +142,9 @@ export function prefill(board: TierBoard, films: Film[]): TierBoard {
 
 /** Send everything back to the pool, keeping the rows themselves. */
 export function clearToPool(board: TierBoard): TierBoard {
-  return { ...board, placements: emptyPlacements(board.tiers) };
+  const placements = emptyPlacements(board.tiers);
+  // Already empty: the button is always offered, so pressing it on an empty
+  // board is easy to do and must not cost an undo step.
+  if (samePlacements(board.placements, placements)) return board;
+  return { ...board, placements };
 }

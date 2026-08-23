@@ -28,13 +28,31 @@ function freshTierId(board: TierBoard): string {
   return `tier-${String(n)}`;
 }
 
+type TierShape = TierBoard['tiers'][number];
+
+/**
+ * Field-by-field, because the point is to recognise a change that produced an
+ * equal row. Adding a field to `Tier` means adding it here — the alternative,
+ * a generic key walk, would silently keep working while comparing less than it
+ * claims to.
+ */
+function sameTier(a: TierShape, b: TierShape): boolean {
+  return a.id === b.id && a.label === b.label && a.color === b.color && a.minRating === b.minRating;
+}
+
 function withTier(
   board: TierBoard,
   tierId: string,
-  change: (tier: TierBoard['tiers'][number]) => TierBoard['tiers'][number],
+  change: (tier: TierShape) => TierShape,
 ): TierBoard {
-  if (!board.tiers.some((tier) => tier.id === tierId)) return board;
-  return { ...board, tiers: board.tiers.map((tier) => (tier.id === tierId ? change(tier) : tier)) };
+  const current = board.tiers.find((tier) => tier.id === tierId);
+  if (!current) return board;
+  const changed = change(current);
+  // Setting a row's label, colour or threshold to what it already holds is
+  // not an edit. Returning the input reference is what lets App's history skip
+  // it — see the guard in `dispatch`.
+  if (sameTier(current, changed)) return board;
+  return { ...board, tiers: board.tiers.map((tier) => (tier.id === tierId ? changed : tier)) };
 }
 
 export function boardReducer(board: TierBoard, action: BoardAction): TierBoard {
@@ -77,7 +95,12 @@ export function boardReducer(board: TierBoard, action: BoardAction): TierBoard {
       const tiers = [...board.tiers];
       const [moved] = tiers.splice(from, 1);
       if (!moved) return board;
-      tiers.splice(Math.max(0, Math.min(action.toIndex, tiers.length)), 0, moved);
+      const to = Math.max(0, Math.min(action.toIndex, tiers.length));
+      tiers.splice(to, 0, moved);
+      // Moving a row to the index it already occupies — the clamp makes this
+      // reachable from the first row's "up" and the last row's "down" — leaves
+      // the order untouched, so it is not an undo step.
+      if (to === from) return board;
       return { ...board, tiers };
     }
 
@@ -91,6 +114,6 @@ export function boardReducer(board: TierBoard, action: BoardAction): TierBoard {
       return withTier(board, action.tierId, (tier) => ({ ...tier, minRating: action.minRating }));
 
     case 'renameBoard':
-      return { ...board, name: action.name };
+      return action.name === board.name ? board : { ...board, name: action.name };
   }
 }

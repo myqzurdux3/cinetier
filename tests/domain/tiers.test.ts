@@ -103,6 +103,25 @@ describe('moveFilm', () => {
     moveFilm(original, heat.id, { tierId: 'S', index: 0 });
     expect(original.placements.S).toEqual([]);
   });
+
+  it('hands back the very same board when the film is already there', () => {
+    // Reference identity, not deep equality, and that is the whole point: the
+    // undo history in App skips recording when the reducer returns the board
+    // it was given, so "changed nothing" has to be expressible as `===`.
+    // A drag that travels and comes back is the ordinary way to reach this.
+    const placed = moveFilm(board(), heat.id, { tierId: 'S', index: 0 });
+    expect(moveFilm(placed, heat.id, { tierId: 'S', index: 0 })).toBe(placed);
+  });
+
+  it('hands back the very same board when an unplaced film is sent to the pool', () => {
+    const start = board();
+    expect(moveFilm(start, heat.id, 'pool')).toBe(start);
+  });
+
+  it('still returns a new board when the film really moves', () => {
+    const placed = moveFilm(board(), heat.id, { tierId: 'S', index: 0 });
+    expect(moveFilm(placed, heat.id, { tierId: 'B', index: 0 })).not.toBe(placed);
+  });
 });
 
 describe('prefill', () => {
@@ -139,5 +158,12 @@ describe('clearToPool', () => {
     expect(next.tiers).toEqual(filled.tiers);
     expect(placedIds(next).size).toBe(0);
     expect(poolFor(next, library)).toHaveLength(library.length);
+  });
+
+  it('hands back the very same board when nothing was placed to begin with', () => {
+    // The button offering this is always enabled, so pressing it on an empty
+    // board is easy to do by accident and must not cost an undo step.
+    const empty = board();
+    expect(clearToPool(empty)).toBe(empty);
   });
 });

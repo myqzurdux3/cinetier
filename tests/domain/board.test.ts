@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { boardReducer } from '@/domain/board';
+import { boardReducer, type BoardAction } from '@/domain/board';
 import { createBoard, moveFilm, prefill, DEFAULT_TIERS, type TierBoard } from '@/domain/tiers';
 import { makeFilm } from '../support/film';
 
@@ -101,6 +101,47 @@ describe('boardReducer', () => {
       { type: 'moveTier', tierId: 'nope', toIndex: 0 },
     ] as const) {
       expect(boardReducer(board(), action)).toEqual(board());
+    }
+  });
+
+  it('hands back the very same board for an edit that changes nothing', () => {
+    // Reference identity is the contract App's undo history relies on: its
+    // guard compares `next === current.present`, so a branch that produces an
+    // equal-but-new board would push an identical state and leave the next
+    // Ctrl+Z looking broken. One case per branch that can no-op without an
+    // unknown id.
+    const start = boardReducer(board(), { type: 'renameTier', tierId: 'S', label: 'Top' });
+    const unchanging: BoardAction[] = [
+      { type: 'renameTier', tierId: 'S', label: 'Top' },
+      { type: 'recolorTier', tierId: 'S', color: 's' },
+      { type: 'setThreshold', tierId: 'S', minRating: 90 },
+      { type: 'moveTier', tierId: 'S', toIndex: 0 },
+      // Clamped back onto its own index: what the first row's "up" button
+      // would send if it were not disabled.
+      { type: 'moveTier', tierId: 'S', toIndex: -3 },
+      { type: 'renameBoard', name: start.name },
+      { type: 'clearToPool' },
+      { type: 'move', filmId: heat.id, to: 'pool' },
+      { type: 'prefill', films: [] },
+    ];
+    for (const action of unchanging) {
+      expect(boardReducer(start, action)).toBe(start);
+    }
+  });
+
+  it('still returns a new board for each of those edits when it does change something', () => {
+    const start = boardReducer(board(), { type: 'renameTier', tierId: 'S', label: 'Top' });
+    const changing: BoardAction[] = [
+      { type: 'renameTier', tierId: 'S', label: 'Tops' },
+      { type: 'recolorTier', tierId: 'S', color: 'f' },
+      { type: 'setThreshold', tierId: 'S', minRating: 91 },
+      { type: 'moveTier', tierId: 'S', toIndex: 1 },
+      { type: 'renameBoard', name: 'Something else' },
+      { type: 'move', filmId: heat.id, to: { tierId: 'S', index: 0 } },
+      { type: 'prefill', films: library },
+    ];
+    for (const action of changing) {
+      expect(boardReducer(start, action)).not.toBe(start);
     }
   });
 
