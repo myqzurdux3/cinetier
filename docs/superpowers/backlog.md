@@ -232,11 +232,16 @@ effects and their writers, not the render tree.
   screen reader announces while doing it; reloaded the page and watched the board come back;
   run the IndexedDB v2-to-v3 upgrade over a real library; looked at either theme, at any
   width; or renamed, recoloured, added, removed or reordered a row outside a test. Every one
-  of those is exercised by an automated test at the unit or component level — 477 tests
+  of those is exercised by an automated test at the unit or component level — 490 tests
   across 54 files, coverage above the 90/85/90/90 gate — and none of it has been exercised
-  by a person. This is the item to close before trusting anything said elsewhere in this
-  project's docs about drag and drop or keyboard operation beyond "the code implements it
-  and the tests pass."
+  by a person. Added to that list by the branch's fix wave: **nobody has looked at the drag
+  overlay.** A `<DragOverlay>` now draws the dragged card — the standard mitigation for a
+  drag that starts in the virtualised pool and outlives its own source element — and a test
+  pins that it renders the dragged film while a drag is live. That it *looks* like the card
+  it copies, that it sits under the pointer, and that it does not double up with the source
+  card's own transform are all unverified in any browser. This is the item to close before
+  trusting anything said elsewhere in this project's docs about drag and drop or keyboard
+  operation beyond "the code implements it and the tests pass."
 - **The board's save guard has an untested release path.** The debounced save is suppressed
   (`boardReady`) until the board restore settles, and released in a `.finally()` so it fires
   even when `loadFirstBoard()` resolves to `null` — no saved board found. That branch is
