@@ -11,7 +11,7 @@ import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
 import { importFiles, type ImportOutcome } from '@/ui/import/importFiles';
 import type { Film } from '@/domain/film';
 import { saveBoard, loadFirstBoard, clearBoards } from '@/services/boards';
-import { createBoard, moveFilm } from '@/domain/tiers';
+import { createBoard, moveFilm, type TierBoard } from '@/domain/tiers';
 
 vi.mock('@/services/library', () => ({
   loadLibrary: vi.fn(),
@@ -731,9 +731,15 @@ describe('App board', () => {
   it('filters the pool without emptying the rows', async () => {
     // The spec's first decision, end to end: a criterion that excludes a
     // placed film must not remove it from its row.
+    // 'c' is filtered out (rating 20 < 50) but never placed — the film that
+    // distinguishes poolFor(board, visible) from poolFor(board, films): both
+    // give the same pool count if the only excluded film is also the placed
+    // one, which is exactly the coincidence a prior review caught in this
+    // fixture's earlier, two-film form.
     vi.mocked(loadLibrary).mockResolvedValue([
       film('a', { title: 'Kept', rating: 90 }),
       film('b', { title: 'Cut', rating: 10 }),
+      film('c', { title: 'AlsoCut', rating: 20 }),
     ]);
     vi.mocked(loadFirstBoard).mockResolvedValue(
       moveFilm(createBoard('board-1', 'Mine'), 'b', { tierId: 'S', index: 0 }),
@@ -746,6 +752,36 @@ describe('App board', () => {
     expect(row).toHaveTextContent('Cut');
     await waitFor(() => {
       expect(screen.getByRole('region', { name: 'Pool' })).toHaveTextContent('1 film to place');
+    });
+  });
+
+  it('does not autosave the fresh default board while a slower restore is still pending', async () => {
+    // Regression: the debounced save fires 400ms after mount regardless of
+    // whether loadFirstBoard() has resolved yet. Without a guard, that save
+    // would write the empty default board over whatever was actually saved
+    // last time — a tab closed in that window loses it for good, and the app
+    // would write a board record even for someone who never opened one.
+    const boardDeferred = deferred<TierBoard | null>();
+    vi.mocked(loadFirstBoard).mockReturnValue(boardDeferred.promise);
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+
+    render(<App />);
+    await screen.findByText('Heat');
+
+    // Real time, not a flush: the debounced save is scheduled with a real
+    // setTimeout, and the restore is still pending when it would fire.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(saveBoard).not.toHaveBeenCalled();
+
+    // The slow restore now resolves with a real board.
+    const restored = moveFilm(createBoard('board-1', 'Mine'), 'a', {
+      tierId: 'S',
+      index: 0,
+    });
+    boardDeferred.resolve(restored);
+
+    await waitFor(() => {
+      expect(saveBoard).toHaveBeenCalledWith(restored);
     });
   });
 });

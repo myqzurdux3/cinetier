@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 interface ResetConfirmProps {
   filmCount: number;
   boardName: string | null;
@@ -18,12 +20,27 @@ export function ResetConfirm({
   onConfirm,
   onCancel,
 }: ResetConfirmProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // aria-modal="true" only claims that nothing behind this is reachable —
+    // it does not make that true on its own. Without focus actually landing
+    // here, a keyboard or screen-reader user would see the most destructive
+    // control in the app appear to do nothing at all when clicked.
+    dialogRef.current?.focus();
+  }, []);
+
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Start over"
-      className="space-y-3 rounded-card border border-line p-4"
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onCancel();
+      }}
+      className="space-y-3 rounded-card border border-line p-4 focus:outline-none focus:ring-2 focus:ring-accent"
     >
       <p className="text-ink">This deletes, from this browser:</p>
       <ul className="list-disc space-y-1 pl-6 text-sm text-ink-dim">

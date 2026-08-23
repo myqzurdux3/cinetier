@@ -46,4 +46,19 @@ describe('ResetConfirm', () => {
     renderConfirm({ boardName: null, placedCount: 0 });
     expect(screen.getByRole('dialog')).not.toHaveTextContent(/placed/i);
   });
+
+  it('moves focus into the dialog on mount', () => {
+    // aria-modal="true" only claims a keyboard/screen-reader user is
+    // confined here — nothing makes that true unless focus actually lands
+    // somewhere inside it.
+    renderConfirm();
+    expect(screen.getByRole('dialog')).toHaveFocus();
+  });
+
+  it('cancels on Escape', async () => {
+    const { onCancel, onConfirm } = renderConfirm();
+    await userEvent.keyboard('{Escape}');
+    expect(onCancel).toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });

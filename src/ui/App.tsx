@@ -43,6 +43,13 @@ export default function App() {
   const boardValue = history.present;
 
   const dispatch = useCallback((action: BoardAction) => {
+    // A real edit — even to the freshly-created default board, before any
+    // restore has resolved — always wins: over a slow board restore, which
+    // would otherwise clobber the edit and discard its undo stack via
+    // initHistory, and over the "nothing to save yet" guard on the debounced
+    // save below (`boardReady`), so the edit is not silently dropped.
+    restoreCancelled.current = true;
+    boardReady.current = true;
     setHistory((current) => {
       const next = boardReducer(current.present, action);
       // An action that changed nothing must not become an undo step, or the
@@ -72,6 +79,18 @@ export default function App() {
   // produced it a no-op. Nothing else distinguishes two runs from each other.
   const runId = useRef(0);
 
+  // Guards the debounced board save further down. Without it, the very
+  // first save (400ms after mount) can fire before `loadFirstBoard()` below
+  // has had a chance to resolve, writing the fresh, empty default board over
+  // whatever was actually saved last time — the read simply hasn't caught up
+  // yet. Settled by the board restore, whichever way it goes (found a board
+  // or not, there is nothing left here for a save to clobber), and by
+  // `dispatch` the instant the user makes a real edit. `performReset` flips
+  // it back to false, since the fresh board it creates must not be
+  // autosaved on the very next tick — that would recreate a board record
+  // the confirmation dialog just promised was gone for good.
+  const boardReady = useRef(false);
+
   useEffect(() => {
     loadFilters()
       .then((restored) => {
@@ -93,6 +112,11 @@ export default function App() {
       })
       .catch((error: unknown) => {
         console.error('Failed to restore the saved board', error);
+      })
+      .finally(() => {
+        // Settled either way — found a board, found nothing, or failed —
+        // there is nothing left for the debounced save to race against.
+        boardReady.current = true;
       });
   }, []);
 
@@ -100,6 +124,11 @@ export default function App() {
     // Dragging produces a burst of moves; one transaction per frame of that
     // burst would be pointless work.
     const id = setTimeout(() => {
+      // Before the restore above has settled, `boardValue` is still the
+      // fresh default board created at mount — saving it here would race
+      // the restore, and if this timer wins, overwrite the real saved board
+      // with an empty one. See `boardReady`.
+      if (!boardReady.current) return;
       saveBoard(boardValue).catch((error: unknown) => {
         console.error('Failed to save the board', error);
       });
@@ -255,6 +284,7 @@ export default function App() {
     clearBoards().catch((error: unknown) => {
       console.error('Failed to clear the saved board', error);
     });
+    boardReady.current = false;
     setHistory(initHistory(createBoard('board-1', 'My ranking')));
     setPoolSearch('');
     setSource(null);
