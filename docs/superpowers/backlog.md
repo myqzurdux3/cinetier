@@ -198,11 +198,15 @@ extracting is the pair of persistence effects and their writers, not the render 
   in 1 of 9 full-suite runs during the filter-rail plan.** A re-review established nothing in
   the filter-rail work can produce it — that file does not render `App` — so it is
   pre-existing and unexplained. Worth a proper look.
-- **The responsive layout below `lg` and the disabled-while-fetching sections remain
-  unverified by hand.** The automated browser tab reports `visibilityState: "hidden"`, so
-  `requestAnimationFrame` never fires and `ResizeObserver` never reports; and on the 6-film
-  import used to check it, the details pass finished in 277 ms — too fast to observe
-  mid-flight. Both need a real resized window, and a slower or larger import, respectively.
+- **The disabled-while-fetching sections remain unverified by hand.** On the 6-film import
+  used to check the rail, the details pass finished in 277 ms — too fast to observe
+  mid-flight. Needs a Letterboxd import large enough that the pass is visible while it runs.
+- ~~**The responsive layout below `lg` remains unverified by hand.**~~ Verified by the user
+  on the deployed site (2026-08-23): below the breakpoint the rail is replaced by a Filters
+  button that opens it. It could not be checked here because the automated browser tab
+  reports `visibilityState: "hidden"`, so `requestAnimationFrame` never fires and
+  `ResizeObserver` never reports — the layout that depends on a measured width therefore
+  cannot be exercised through it at all.
 
 ## Closed on 2026-08-19, from a real user import
 
