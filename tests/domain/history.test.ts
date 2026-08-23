@@ -11,6 +11,7 @@ describe('history', () => {
 
   it('undo returns the previous state and redo returns the undone one', () => {
     let history = record(initHistory('a'), 'b');
+    expect(canUndo(history)).toBe(true);
     history = record(history, 'c');
 
     history = undo(history);
@@ -42,8 +43,11 @@ describe('history', () => {
 
   it('undo at the beginning and redo at the end are no-ops', () => {
     const history = initHistory('a');
-    expect(undo(history)).toEqual(history);
-    expect(redo(history)).toEqual(history);
+    // Reference equality matters, not just value equality: Task 11 calls
+    // setHistory(undo) straight from React state, and returning the same
+    // object is what lets React bail out of re-rendering at the boundary.
+    expect(undo(history)).toBe(history);
+    expect(redo(history)).toBe(history);
   });
 
   it('forgets the oldest state past the limit', () => {
