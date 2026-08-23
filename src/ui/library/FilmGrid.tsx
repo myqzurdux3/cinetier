@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Film } from '@/domain/film';
 import { FilmCard } from './FilmCard';
@@ -12,6 +12,12 @@ interface FilmGridProps {
   columns?: number;
   /** Changes once per import. Playing the entrance again is what it means. */
   generation?: number;
+  /**
+   * What to draw in a cell. Defaults to the library's own card; the board's
+   * pool passes a draggable one. The grid owns layout and virtualisation and
+   * has no opinion about the cell.
+   */
+  renderCard?: (film: Film) => ReactNode;
 }
 
 const MIN_COLUMNS = 2;
@@ -63,7 +69,7 @@ export function deriveRowPitch(width: number, columns: number): number {
   return cardHeight + GAP_PX;
 }
 
-export function FilmGrid({ films, columns, generation = 0 }: FilmGridProps) {
+export function FilmGrid({ films, columns, generation = 0, renderCard }: FilmGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [measuredWidth, setMeasuredWidth] = useState(DEFAULT_WIDTH);
   const effectiveColumns = columns ?? deriveColumnCount(measuredWidth);
@@ -126,7 +132,7 @@ export function FilmGrid({ films, columns, generation = 0 }: FilmGridProps) {
                   className="motion-safe:transition-all motion-safe:duration-500 motion-safe:data-[entering=true]:translate-y-2 motion-safe:data-[entering=true]:opacity-0"
                   style={{ transitionDelay: `${Math.min(index * 25, 200)}ms` }}
                 >
-                  <FilmCard film={film} />
+                  {renderCard ? renderCard(film) : <FilmCard film={film} />}
                 </div>
               ))}
           </div>
