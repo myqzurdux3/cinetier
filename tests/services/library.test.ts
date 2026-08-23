@@ -93,9 +93,11 @@ describe('the v1 to v2 schema upgrade', () => {
     const upgraded = await db();
 
     // Deliberately pinned to today's VERSION: a bump to 3 should fail here and
-    // make whoever bumps it decide what the upgrade owes this test.
-    expect(upgraded.version).toBe(2);
+    // make whoever bumps it decide what the upgrade owes this test. It did —
+    // boards landed as v3, so this now pins 3 and includes 'boards'.
+    expect(upgraded.version).toBe(3);
     expect(Array.from(upgraded.objectStoreNames).sort()).toEqual([
+      'boards',
       'filters',
       'library',
       'tmdb',
