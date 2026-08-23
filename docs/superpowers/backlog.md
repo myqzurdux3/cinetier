@@ -88,9 +88,12 @@ extracting is the pair of persistence effects and their writers, not the render 
 - **A failed detail lookup is cached as "TMDB had nothing"** for thirty days, the
   same rule the poster cache follows. A title that failed because the network
   dropped will not be asked about again for a month.
-- **Episodes never get details.** `lookupByImdbId` reads `movie_results` and
-  `tv_results` only, so an imported episode carries no `tmdbId` and the pass
-  skips it.
+- **An episode with an imdbId never gets details.** `lookupByImdbId` reads
+  `movie_results` and `tv_results` only, so such an episode carries no
+  `tmdbId` and the pass skips it. An episode with no imdbId is matched by
+  `searchByTitle` instead, can pick up a `tmdbId`, and reaches the pass after
+  all — harmlessly, since `enrichDetails` falls back to the `/movie` endpoint
+  for anything it doesn't recognize as television.
 - **`reset()` does not reset `railOpen`**, and calls `clearFilters()` unconditionally even
   when nothing was ever saved.
 - **`NoResults.tsx`'s `culprit && description` is a redundant double guard** —

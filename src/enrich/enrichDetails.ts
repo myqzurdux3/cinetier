@@ -16,9 +16,13 @@ const DEFAULT_CONCURRENCY = 6;
  * The kinds TMDB files under /tv. Everything else — films, television films,
  * shorts, and anything we could not classify — is a /movie.
  *
- * Episodes are absent on purpose: `lookupByImdbId` reads `movie_results` and
- * `tv_results` only, so an episode never comes back with a tmdbId and never
- * reaches this pass at all.
+ * Episodes are absent on purpose, but that only holds for the records with an
+ * imdbId: `lookupByImdbId` (services/tmdb.ts) reads `movie_results` and
+ * `tv_results` only, so an episode looked up that way never comes back with a
+ * tmdbId. An episode with no imdbId is matched by `searchByTitle` instead
+ * (enrichLibrary.ts) and can pick up a tmdbId, reaching this pass after all.
+ * Harmless either way — TELEVISION not listing 'episode' just means it falls
+ * back to the /movie endpoint below, the same as anything else unclassified.
  */
 const TELEVISION: ReadonlySet<TitleType> = new Set<TitleType>(['series', 'miniSeries']);
 
