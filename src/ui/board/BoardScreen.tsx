@@ -1,17 +1,20 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { Film } from '@/domain/film';
 import type { TierBoard } from '@/domain/tiers';
 import type { BoardAction } from '@/domain/board';
+import { BoardCardFace } from './BoardCard';
 import { TierRow } from './TierRow';
 import { TierRowControls } from './TierRowControls';
 import { Pool } from './Pool';
@@ -38,6 +41,13 @@ export function BoardScreen({
   dispatch,
 }: BoardScreenProps) {
   const byId = useMemo(() => new Map(films.map((film) => [film.id, film])), [films]);
+
+  // The film currently being dragged, for the overlay below. Cleared on end
+  // and on cancel so the state never claims a drag that is over — note that no
+  // test can observe those two clears, because dnd-kit gates the overlay's
+  // children on its own `active` as well, and that is already null by then.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeFilm = activeId === null ? null : (byId.get(activeId) ?? null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -73,6 +83,7 @@ export function BoardScreen({
   };
 
   function onDragEnd(event: DragEndEvent) {
+    setActiveId(null);
     const target = event.over?.data.current as DropTarget | undefined;
     if (!target) return;
     const destination = destinationFor(target, board, String(event.active.id));
@@ -86,7 +97,13 @@ export function BoardScreen({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
+      onDragStart={(event: DragStartEvent) => {
+        setActiveId(String(event.active.id));
+      }}
       onDragEnd={onDragEnd}
+      onDragCancel={() => {
+        setActiveId(null);
+      }}
       accessibility={{ announcements: boardAnnouncements(describe) }}
     >
       <div className="space-y-4">
@@ -111,6 +128,21 @@ export function BoardScreen({
 
         <Pool films={poolFilms} search={search} onSearchChange={onSearchChange} />
       </div>
+
+      {/* The pool is virtualised: a card dragged out of it can be unmounted
+          mid-drag, either by the auto-scroll dnd-kit runs on the pool's own
+          scroll container or by the row it is travelling towards changing the
+          pool's contents. Without an overlay the dragged element *is* that
+          virtualised node, so the drag would lose the thing it is dragging.
+          The overlay is a copy dnd-kit owns and positions itself, which
+          outlives the source element by construction. */}
+      <DragOverlay>
+        {activeFilm && (
+          <div className="w-full">
+            <BoardCardFace film={activeFilm} />
+          </div>
+        )}
+      </DragOverlay>
     </DndContext>
   );
 }

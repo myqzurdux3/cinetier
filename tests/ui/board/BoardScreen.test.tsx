@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BoardScreen } from '@/ui/board/BoardScreen';
 import { createBoard, moveFilm, DEFAULT_TIERS } from '@/domain/tiers';
@@ -24,6 +24,14 @@ function renderScreen(overrides: Partial<Parameters<typeof BoardScreen>[0]> = {}
   );
   return { dispatch, board };
 }
+
+// The pool renders through FilmGrid, which is virtualized; jsdom reports every
+// element as zero-height, so without this the grid renders no rows at all and
+// no pool card exists to drag. Same stub as tests/ui/board/Pool.test.tsx.
+beforeEach(() => {
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 800 });
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 1200 });
+});
 
 describe('BoardScreen', () => {
   it('renders one row per tier, in the board’s order', () => {
@@ -81,5 +89,24 @@ describe('BoardScreen', () => {
     fireEvent.keyDown(card, { code: 'Space' });
     const region = document.querySelector('[id^="DndLiveRegion"]');
     expect(region).toHaveTextContent('Heat is over tier S, position 1 of 1.');
+  });
+
+  it('draws the dragged pool card in an overlay, so the drag outlives its source', () => {
+    // The spec's §4 risk: the pool is virtualised (FilmGrid, overscan 3, its
+    // own scroll container) and dnd-kit auto-scrolls that container towards
+    // the rows during a drag, so the card the user grabbed can be unmounted
+    // mid-gesture. Without a DragOverlay the dragged element *is* that node.
+    // The overlay is a second copy dnd-kit owns, which is why "Dune" appears
+    // twice here and only while a drag is live.
+    renderScreen();
+    expect(screen.getAllByText('Dune')).toHaveLength(1);
+
+    const card = screen
+      .getByText('Dune')
+      .closest('[role="button"], [aria-roledescription]') as HTMLElement;
+    card.focus();
+    fireEvent.keyDown(card, { code: 'Space' });
+
+    expect(screen.getAllByText('Dune')).toHaveLength(2);
   });
 });

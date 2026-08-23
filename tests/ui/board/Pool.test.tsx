@@ -39,13 +39,25 @@ describe('Pool', () => {
     expect(screen.getByText('1 film to place')).toBeInTheDocument();
   });
 
-  it('reports what was typed, without filtering anything itself', () => {
-    // The pool is controlled: App owns the search text and hands down the
-    // already-narrowed list. A Pool that filtered internally would disagree
-    // with the count above the moment the rail also had something to say.
+  it('reports what was typed', () => {
     const { onSearchChange } = renderPool();
     fireEvent.change(screen.getByLabelText('Search the pool'), { target: { value: 'hea' } });
     expect(onSearchChange).toHaveBeenCalledWith('hea');
+  });
+
+  it('renders every film it is given, even ones the search text excludes', () => {
+    // The pool is controlled: App owns the search text and hands down the
+    // already-narrowed list. A Pool that filtered internally would disagree
+    // with the count above the moment the rail also had something to say.
+    //
+    // The search has to be non-empty for this to mean anything — filtering by
+    // '' is the identity, so a Pool that filtered would look identical. 'hea'
+    // matches Heat and not Dune, so a Pool that filtered would drop Dune and
+    // say "1 film to place".
+    renderPool({ search: 'hea' });
+    expect(screen.getByText('Heat')).toBeInTheDocument();
+    expect(screen.getByText('Dune')).toBeInTheDocument();
+    expect(screen.getByText('2 films to place')).toBeInTheDocument();
   });
 
   it('explains an empty pool rather than showing a blank area', () => {

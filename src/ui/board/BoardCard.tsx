@@ -9,6 +9,41 @@ interface BoardCardProps {
 }
 
 /**
+ * What a card looks like, with nothing about dragging in it.
+ *
+ * A fragment rather than an element, so `BoardCard` below renders exactly the
+ * DOM it always has. It exists so the drag overlay can draw the same card
+ * without calling `useSortable` a second time for an id that is already
+ * registered — and so the two can never drift apart, since there is only one
+ * description of a card's appearance.
+ */
+export function BoardCardFace({ film }: { film: Film }) {
+  return (
+    <>
+      {/* The title appears exactly once, so a card's text content is the
+          film's name and nothing else. With a poster it is visually hidden
+          and the image is decorative; without one it *is* the card. */}
+      {film.posterPath && (
+        <img
+          src={`https://image.tmdb.org/t/p/w154${film.posterPath}`}
+          alt=""
+          className="aspect-[2/3] w-full rounded-card object-cover"
+        />
+      )}
+      <span
+        className={
+          film.posterPath
+            ? 'sr-only'
+            : 'flex aspect-[2/3] w-full items-center justify-center rounded-card border border-line p-1 text-center text-[10px] leading-tight text-ink-dim'
+        }
+      >
+        {film.title}
+      </span>
+    </>
+  );
+}
+
+/**
  * One poster, draggable by pointer and by keyboard.
  *
  * `data` is what Task 5's translation reads back on drop: dnd-kit hands the
@@ -32,25 +67,7 @@ export function BoardCard({ film, tierId }: BoardCardProps) {
       {...attributes}
       {...listeners}
     >
-      {/* The title appears exactly once, so a card's text content is the
-          film's name and nothing else. With a poster it is visually hidden
-          and the image is decorative; without one it *is* the card. */}
-      {film.posterPath && (
-        <img
-          src={`https://image.tmdb.org/t/p/w154${film.posterPath}`}
-          alt=""
-          className="aspect-[2/3] w-full rounded-card object-cover"
-        />
-      )}
-      <span
-        className={
-          film.posterPath
-            ? 'sr-only'
-            : 'flex aspect-[2/3] w-full items-center justify-center rounded-card border border-line p-1 text-center text-[10px] leading-tight text-ink-dim'
-        }
-      >
-        {film.title}
-      </span>
+      <BoardCardFace film={film} />
     </div>
   );
 }
