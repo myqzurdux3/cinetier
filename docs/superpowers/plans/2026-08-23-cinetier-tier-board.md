@@ -1347,11 +1347,14 @@ export function BoardCard({ film, tierId }: BoardCardProps) {
     data: { type: 'card', tierId, filmId: film.id },
   });
 
+  // A plain div, not an <li>: this card renders both inside a row's list and
+  // inside the pool's grid, and an <li> in the grid would be a list item with
+  // no list. TierRow supplies the <li> around it.
   return (
-    <li
+    <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`${isDragging ? 'opacity-40' : ''} w-16 shrink-0 sm:w-20`}
+      className={`${isDragging ? 'opacity-40' : ''} w-full`}
       {...attributes}
       {...listeners}
     >
@@ -1374,7 +1377,7 @@ export function BoardCard({ film, tierId }: BoardCardProps) {
       >
         {film.title}
       </span>
-    </li>
+    </div>
   );
 }
 ```
@@ -1439,7 +1442,11 @@ export function TierRow({ tier, films, children }: TierRowProps) {
             {films.length === 0 ? (
               <li className="self-center px-2 text-sm text-ink-dim">Drop films here</li>
             ) : (
-              films.map((film) => <BoardCard key={film.id} film={film} tierId={tier.id} />)
+              films.map((film) => (
+                <li key={film.id} className="w-16 shrink-0 sm:w-20">
+                  <BoardCard film={film} tierId={tier.id} />
+                </li>
+              ))
             )}
           </ul>
         </SortableContext>
@@ -1479,6 +1486,7 @@ git commit -m "feat(ui): draw a tier row and the cards it holds"
 
 **Files:**
 
+- Modify: `src/ui/library/FilmGrid.tsx` (accept an optional cell renderer)
 - Create: `src/ui/board/Pool.tsx`
 - Test: `tests/ui/board/Pool.test.tsx`
 
@@ -1486,6 +1494,19 @@ git commit -m "feat(ui): draw a tier row and the cards it holds"
 
 - Consumes: `Film`, `FilmGrid` from `@/ui/library/FilmGrid`, `useDroppable`.
 - Produces: `Pool({ films, search, onSearchChange })`. Task 8 renders it; Task 11 owns the search state.
+
+**The pool's cards must be draggable, and `FilmGrid` renders `FilmCard`.** Dragging a poster out of the pool is the board's central action, so the pool cannot render the library's plain card. Rather than duplicating the virtualiser, `FilmGrid` gains one optional prop:
+
+```ts
+  /**
+   * What to draw in a cell. Defaults to the library's own card; the board's
+   * pool passes a draggable one. The grid owns layout and virtualisation and
+   * has no opinion about the cell.
+   */
+  renderCard?: (film: Film) => ReactNode;
+```
+
+used at its single call site as `{renderCard ? renderCard(film) : <FilmCard film={film} />}`. Every existing caller omits it and is unaffected — assert that by leaving `tests/ui/FilmGrid.test.tsx` untouched and green.
 
 **What the pool is.** The grid that already ships, as a drop target, with a title search. The rail filters it by every axis the domain understands; the search covers the one axis the rail has no control for — "where is Heat" — and is deliberately not a criterion: not persisted, not a chip, not part of `FilterCriteria`.
 
@@ -1542,6 +1563,15 @@ describe('Pool', () => {
     renderPool({ films: [], search: 'zzz' });
     expect(screen.getByText(/no film in the pool matches/i)).toBeInTheDocument();
   });
+
+  it('renders draggable cards, not the library’s plain ones', () => {
+    // Dragging out of the pool is the board's central action. FilmGrid's own
+    // FilmCard is not a draggable, so a pool that fell back to it would look
+    // right and do nothing — the exact defect this test exists to catch.
+    renderPool();
+    const card = screen.getByText('Heat').closest('[role="button"], [aria-roledescription]');
+    expect(card).not.toBeNull();
+  });
 });
 ```
 
@@ -1559,6 +1589,7 @@ import { useId } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import type { Film } from '@/domain/film';
 import { FilmGrid } from '@/ui/library/FilmGrid';
+import { BoardCard } from './BoardCard';
 
 interface PoolProps {
   /** Already narrowed by the rail and by `search`; the pool renders what it is given. */
@@ -1604,7 +1635,7 @@ export function Pool({ films, search, onSearchChange }: PoolProps) {
             : 'No film in the pool matches that search.'}
         </p>
       ) : (
-        <FilmGrid films={films} />
+        <FilmGrid films={films} renderCard={(film) => <BoardCard film={film} tierId={null} />} />
       )}
     </section>
   );
@@ -1616,9 +1647,11 @@ export function Pool({ films, search, onSearchChange }: PoolProps) {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run tests/ui/board/Pool.test.tsx`
-Expected: PASS, 5 tests.
+Expected: PASS, 6 tests.
 
 - [ ] **Step 5: Mutation-check**
+
+0. Drop the `renderCard` prop from the `FilmGrid` call so the pool falls back to `FilmCard`. Expected: **"renders draggable cards, not the library's plain ones"** goes red.
 
 1. Make `Pool` filter internally — `films.filter(f => f.title.toLowerCase().includes(search.toLowerCase()))` — and drop the `onSearchChange` call. Expected: **"reports what was typed, without filtering anything itself"** goes red.
 2. Collapse the two empty-pool messages into one. Expected: **"explains an empty pool differently when a search is what emptied it"** goes red.
@@ -1630,7 +1663,7 @@ Run: `npm run test:run && npm run typecheck && npm run lint`
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/ui/board/Pool.tsx tests/ui/board/Pool.test.tsx
+git add src/ui/library/FilmGrid.tsx src/ui/board/Pool.tsx tests/ui/board/Pool.test.tsx
 git commit -m "feat(ui): make the library grid the board's pool"
 ```
 
