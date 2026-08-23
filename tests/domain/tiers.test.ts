@@ -1,123 +1,143 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_TIERS, createEmptyBoard, autoFillBoard, moveFilm } from '@/domain/tiers';
-import type { Film } from '@/domain/film';
+import {
+  DEFAULT_TIERS,
+  createBoard,
+  placedIds,
+  poolFor,
+  moveFilm,
+  prefill,
+  clearToPool,
+  type TierBoard,
+} from '@/domain/tiers';
+import { makeFilm } from '../support/film';
 
-function film(id: string, rating: number | null): Film {
-  return {
-    id,
-    imdbId: null,
-    tmdbId: null,
-    title: id,
-    year: 2000,
-    titleType: 'movie',
-    rating,
-    ratingScale: 'imdb10',
-    watchedAt: null,
-    watchedAtIsApproximate: false,
-    isRewatch: false,
-    genres: [],
-    directors: [],
-    runtimeMinutes: null,
-    publicRating: null,
-    posterPath: null,
-    detailsFetched: false,
-    source: 'imdb',
-  };
+const heat = makeFilm({ title: 'Heat', rating: 95 });
+const dune = makeFilm({ title: 'Dune', rating: 82 });
+const solaris = makeFilm({ title: 'Solaris', rating: 64 });
+const unrated = makeFilm({ title: 'Unrated', rating: null });
+const library = [heat, dune, solaris, unrated];
+
+function board(): TierBoard {
+  return createBoard('board-1', 'My ranking');
 }
 
-const films = [
-  film('a', 95),
-  film('b', 85),
-  film('c', 75),
-  film('d', 65),
-  film('e', 55),
-  film('f', 30),
-  film('g', null),
-];
-
-describe('createEmptyBoard', () => {
-  it('puts every film in the pool and none in a tier', () => {
-    const board = createEmptyBoard(films);
-    expect(board.pool).toHaveLength(7);
-    expect(Object.values(board.placements).flat()).toHaveLength(0);
+describe('createBoard', () => {
+  it('starts with every tier empty', () => {
+    const fresh = board();
+    expect(fresh.id).toBe('board-1');
+    expect(fresh.name).toBe('My ranking');
+    expect(fresh.tiers).toEqual(DEFAULT_TIERS);
+    for (const tier of DEFAULT_TIERS) {
+      expect(fresh.placements[tier.id]).toEqual([]);
+    }
   });
 
-  it('creates one placement bucket per tier', () => {
-    const board = createEmptyBoard(films);
-    expect(Object.keys(board.placements).sort()).toEqual(DEFAULT_TIERS.map((t) => t.id).sort());
+  it('names a theme token rather than a colour value', () => {
+    // The domain must not contain colour literals; the UI resolves the token.
+    // A regression here would put `var(--color-tier-s)` back in domain/, which
+    // no lint rule covers because the rule only guards src/ui/**.
+    for (const tier of DEFAULT_TIERS) {
+      expect(tier.color).toMatch(/^[sabcdf]$/);
+    }
   });
 });
 
-describe('autoFillBoard', () => {
-  it('assigns each rated film to the tier its rating falls into', () => {
-    const board = autoFillBoard(films);
-    expect(board.placements['S']).toEqual(['a']);
-    expect(board.placements['A']).toEqual(['b']);
-    expect(board.placements['B']).toEqual(['c']);
-    expect(board.placements['C']).toEqual(['d']);
-    expect(board.placements['D']).toEqual(['e']);
-    expect(board.placements['F']).toEqual(['f']);
+describe('poolFor', () => {
+  it('is the library minus everything placed', () => {
+    const placed = moveFilm(board(), heat.id, { tierId: 'S', index: 0 });
+    expect(poolFor(placed, library).map((f) => f.id)).toEqual([dune.id, solaris.id, unrated.id]);
   });
 
-  it('leaves unrated films in the pool rather than guessing', () => {
-    expect(autoFillBoard(films).pool).toEqual(['g']);
+  it('gains a film the library gained, with no board change at all', () => {
+    // The point of deriving the pool: a re-import reconciles itself.
+    const placed = moveFilm(board(), heat.id, { tierId: 'S', index: 0 });
+    const arrival = makeFilm({ title: 'Arrival', rating: 88 });
+    expect(poolFor(placed, [...library, arrival]).map((f) => f.id)).toContain(arrival.id);
   });
 
-  it('orders films within a tier by rating, highest first', () => {
-    const board = autoFillBoard([film('low', 91), film('high', 99)]);
-    expect(board.placements['S']).toEqual(['high', 'low']);
-  });
-
-  it('honours custom tier thresholds', () => {
-    const tiers = [
-      { id: 'good', label: 'Good', color: '#0f0', minRating: 60 },
-      { id: 'bad', label: 'Bad', color: '#f00', minRating: null },
-    ];
-    const board = autoFillBoard(films, tiers);
-    expect(board.placements['good']).toEqual(['a', 'b', 'c', 'd']);
-    expect(board.placements['bad']).toEqual(['e', 'f']);
+  it('keeps a placement whose film the library no longer has', () => {
+    // Skipped when rendering, kept in storage: a later import that restores
+    // the film restores its place. Deleting the placement here would make
+    // that impossible.
+    const placed = moveFilm(board(), heat.id, { tierId: 'S', index: 0 });
+    const shrunk = library.filter((f) => f.id !== heat.id);
+    expect(poolFor(placed, shrunk).map((f) => f.id)).not.toContain(heat.id);
+    expect(placed.placements.S).toEqual([heat.id]);
   });
 });
 
 describe('moveFilm', () => {
-  it('moves a film from the pool into a tier at the requested position', () => {
-    const board = moveFilm(createEmptyBoard(films), 'c', 'S', 0);
-    expect(board.placements['S']).toEqual(['c']);
-    expect(board.pool).not.toContain('c');
+  it('places a film at an index in a tier', () => {
+    let next = moveFilm(board(), heat.id, { tierId: 'S', index: 0 });
+    next = moveFilm(next, dune.id, { tierId: 'S', index: 0 });
+    expect(next.placements.S).toEqual([dune.id, heat.id]);
   });
 
-  it('moves a film between tiers', () => {
-    const board = moveFilm(autoFillBoard(films), 'f', 'S', 0);
-    expect(board.placements['S']).toEqual(['f', 'a']);
-    expect(board.placements['F']).toEqual([]);
+  it('moves a film between tiers, leaving no trace in the old one', () => {
+    let next = moveFilm(board(), heat.id, { tierId: 'S', index: 0 });
+    next = moveFilm(next, heat.id, { tierId: 'B', index: 0 });
+    expect(next.placements.S).toEqual([]);
+    expect(next.placements.B).toEqual([heat.id]);
   });
 
-  it('reorders a film within its own tier', () => {
-    const filled = autoFillBoard([film('x', 99), film('y', 95), film('z', 92)]);
-    const board = moveFilm(filled, 'z', 'S', 0);
-    expect(board.placements['S']).toEqual(['z', 'x', 'y']);
+  it('returns a film to the pool by removing it from every tier', () => {
+    let next = moveFilm(board(), heat.id, { tierId: 'S', index: 0 });
+    next = moveFilm(next, heat.id, 'pool');
+    expect(placedIds(next).has(heat.id)).toBe(false);
+    expect(poolFor(next, library).map((f) => f.id)).toContain(heat.id);
   });
 
-  it('sends a film back to the pool when the target tier is null', () => {
-    const board = moveFilm(autoFillBoard(films), 'a', null, 0);
-    expect(board.pool[0]).toBe('a');
-    expect(board.placements['S']).toEqual([]);
+  it('clamps an index past the end rather than leaving a hole', () => {
+    let next = moveFilm(board(), heat.id, { tierId: 'S', index: 0 });
+    next = moveFilm(next, dune.id, { tierId: 'S', index: 99 });
+    expect(next.placements.S).toEqual([heat.id, dune.id]);
   });
 
-  it('does not mutate the board it was given', () => {
-    const original = autoFillBoard(films);
-    const snapshot = JSON.stringify(original);
-    moveFilm(original, 'a', 'F', 0);
-    expect(JSON.stringify(original)).toBe(snapshot);
+  it('ignores a tier that does not exist', () => {
+    const next = moveFilm(board(), heat.id, { tierId: 'nope', index: 0 });
+    expect(next).toEqual(board());
   });
 
-  it('ignores a film id that is not on the board', () => {
-    const board = autoFillBoard(films);
-    expect(moveFilm(board, 'not-a-real-id', 'S', 0)).toBe(board);
+  it('never mutates the board it was given', () => {
+    const original = board();
+    moveFilm(original, heat.id, { tierId: 'S', index: 0 });
+    expect(original.placements.S).toEqual([]);
+  });
+});
+
+describe('prefill', () => {
+  it('places each rated film in the tier its threshold selects', () => {
+    // Thresholds: S>=90, A>=80, B>=70, C>=60, D>=50, F everything else.
+    // Heat 95 -> S, Dune 82 -> A, Solaris 64 -> C, Unrated -> stays pooled.
+    const next = prefill(board(), library);
+    expect(next.placements.S).toEqual([heat.id]);
+    expect(next.placements.A).toEqual([dune.id]);
+    expect(next.placements.C).toEqual([solaris.id]);
+    expect(placedIds(next).has(unrated.id)).toBe(false);
   });
 
-  it('ignores a tier id that does not exist', () => {
-    const board = autoFillBoard(films);
-    expect(moveFilm(board, 'a', 'NOPE', 0)).toBe(board);
+  it('orders a tier by rating, highest first', () => {
+    const alsoS = makeFilm({ title: 'Also S', rating: 91 });
+    const next = prefill(board(), [alsoS, heat]);
+    expect(next.placements.S).toEqual([heat.id, alsoS.id]);
+  });
+
+  it('only ever moves films that are in the pool', () => {
+    // Placing by hand then pre-filling must not rearrange the hand-placed
+    // film. Without the pool check, Heat (95) would be yanked from F to S.
+    const byHand = moveFilm(board(), heat.id, { tierId: 'F', index: 0 });
+    const next = prefill(byHand, library);
+    expect(next.placements.F).toEqual([heat.id]);
+    expect(next.placements.S).toEqual([]);
+  });
+});
+
+describe('clearToPool', () => {
+  it('empties every tier and keeps the tiers themselves', () => {
+    const filled = prefill(board(), library);
+    const next = clearToPool(filled);
+    expect(next.tiers).toEqual(filled.tiers);
+    expect(placedIds(next).size).toBe(0);
+    expect(poolFor(next, library)).toHaveLength(library.length);
   });
 });
