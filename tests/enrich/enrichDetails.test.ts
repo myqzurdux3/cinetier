@@ -124,6 +124,20 @@ describe('enrichDetails', () => {
     expect(fetchMovieDetails).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps separate cache entries for a film and a series that share a numeric TMDB id', async () => {
+    // The cache key's `${kind}:` prefix is the only thing standing between a
+    // film and a series landing on the same cache entry — drop it and a
+    // series would silently inherit a film's genres, directors and runtime.
+    await enrichDetails([makeFilm({ title: 'Movie', tmdbId: 100, titleType: 'movie' })], () => {});
+    await enrichDetails(
+      [makeFilm({ title: 'Series', tmdbId: 100, titleType: 'series' })],
+      () => {},
+    );
+
+    expect(fetchMovieDetails).toHaveBeenCalledWith(100);
+    expect(fetchTvDetails).toHaveBeenCalledWith(100);
+  });
+
   it('reports progress once per film, in order', async () => {
     const seen: { done: number; total: number }[] = [];
     const films = [
