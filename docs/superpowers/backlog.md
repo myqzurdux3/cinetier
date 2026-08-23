@@ -75,6 +75,19 @@ extracting is the pair of persistence effects and their writers, not the render 
   rejected promise, so if the database cannot open — private browsing, quota, a blocked
   upgrade — every later read and write fails with no retry. Since the library now shares
   that connection, the blast radius is larger than when this was first accepted.
+- **`openDB` has no `blocking` callback.** `blocked` (added with the v2 schema) fires on the
+  tab that is *waiting*; `blocking` fires on the tab that is *in the way*, and closing the
+  connection there is what lets the other tab proceed. Adding it cannot help the v1-to-v2
+  transition — the blocking tab is running the old bundle — but it is what stops the next
+  version bump from reproducing this exactly.
+- **A blocked upgrade still shows the user a "your library vanished" screen.** The `blocked`
+  handler logs what happened and says in its own comment that it cannot unblock the hang;
+  only closing the other tab can. Meanwhile `loadLibrary` never resolves, `films` stays null,
+  and the import screen is what the user sees. A visible message would be the honest fix.
+- **`resetDatabase`'s `deleteDB` has no `blocked` handler** and can hang exactly the way the
+  upgrade could, for the same reason.
+- **`String(blockedVersion)` can render "null"** in the blocked message, since `idb` types it
+  `number | null`.
 - **Persistence is all-or-nothing.** The library is saved only after enrichment completes,
   so closing the tab mid-enrichment loses the import. The poster cache survives, so the
   re-import is fast, but it must be repeated. Saving straight after parsing would close it.
@@ -134,8 +147,35 @@ extracting is the pair of persistence effects and their writers, not the render 
   the duration.
 - **The screen-reader status duplicates the visible line verbatim**, so someone reading the
   region afterwards meets the same sentence twice.
-- **Removing a criterion unmounts the focused button.** Focus falls to `<body>`; nothing
-  moves it to a stable neighbour.
+- ~~**Removing a criterion unmounts the focused button.** Focus falls to `<body>`; nothing
+  moves it to a stable neighbour.~~ Closed by the filter-rail branch review's fix wave
+  (2026-08-20): `FilterStatus`'s wrapper carries `tabIndex={-1}` and takes focus after a
+  removal, and `NoResults`'s culprit button targets that same wrapper — which is sound
+  because `FilterStatus` is mounted unconditionally in both the filtered and unfiltered
+  branches.
+- **`FilmGrid`'s entrance replays on every zero-to-non-zero filter transition.** Its
+  `generation` prop is documented "changes once per import — playing the entrance again is
+  what it means", and a test pins that, but `App` unmounts `FilmGrid` whenever the filters
+  admit nothing, so it remounts with `entering` re-initialised and `generation` unchanged.
+  Cosmetic, but the invariant no longer holds.
+- **`<summary>` and the checkboxes take the UA focus ring, not the accent token.** Every
+  input and button in the rail carries `focus:ring-accent`; the only keyboard-operable part
+  of a *closed* section does not. The specification asks for the accent ring on the section
+  itself.
+- **`GenreControls`, `EraControls` and `TypeControls` drop a selected-but-unavailable
+  option**, where `DirectorControls` deliberately keeps one on screen "so a filter can always
+  be undone from the control that set it". A restored criterion the library no longer holds
+  is a real case — `services/filters.ts` preserves it on purpose. In three of the four, the
+  chip is the only escape hatch; in the fourth, the control is too.
+- **`topN: 0` is reachable by typing.** `NumberField`'s `min={1}` is advisory only, and the
+  result is an empty grid. The zero-result screen names Top N as the culprit, so the user can
+  recover.
+- **The README's privacy paragraph says TMDB receives "a title, year, or IMDb identifier"
+  for the details request.** It actually receives a TMDB id. Derived from the same data, so
+  not a false privacy claim, but not literally accurate either.
+- **`filter-status` is a hardcoded document-global id**, now depended on across components so
+  `NoResults` can move focus into `FilterStatus`. Fine while `App` renders exactly one of
+  them; duplicate ids the moment it does not.
 
 ## Testing and tooling
 
