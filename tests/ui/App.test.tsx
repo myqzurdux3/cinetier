@@ -8,6 +8,7 @@ import { enrichLibrary, type EnrichProgress } from '@/enrich/enrichLibrary';
 import { loadFilters, saveFilters, clearFilters } from '@/services/filters';
 import type { FilterCriteria } from '@/domain/filters';
 import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
+import { importFiles, type ImportOutcome } from '@/ui/import/importFiles';
 import type { Film } from '@/domain/film';
 
 vi.mock('@/services/library', () => ({
@@ -30,6 +31,16 @@ vi.mock('@/enrich/enrichDetails', () => ({
   enrichDetails: vi.fn(),
   countPendingDetails: vi.fn(),
 }));
+
+// Real by default — this file otherwise deliberately drives real parsing
+// (see importFixture() below) — wrapped only so one test (Path A, in the
+// "App enrichment races" section) can delay a single call to reproduce a
+// restore resolving *during* an in-flight file read, which nothing else in
+// this file can control.
+vi.mock('@/ui/import/importFiles', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/ui/import/importFiles')>();
+  return { ...actual, importFiles: vi.fn(actual.importFiles) };
+});
 
 const imdbCsv = readFileSync('tests/fixtures/imdb-ratings.csv', 'utf8');
 
@@ -112,6 +123,12 @@ beforeEach(() => {
       onProgress({ films, done: films.length, total: films.length });
       return films;
     });
+
+  // Cleared, not reset: this mock's factory-time implementation already
+  // calls through to the real parser (see the vi.mock call above), and
+  // mockReset() would wipe that out for every test, not just the one that
+  // deliberately overrides it.
+  vi.mocked(importFiles).mockClear();
 });
 
 describe('App persistence', () => {
@@ -537,42 +554,95 @@ describe('App filter rail', () => {
     expect(vi.mocked(enrichDetails).mock.calls[0]![0]).toBe(enriched);
   });
 
-  it('re-enables the detail sections when an abandoned pass is superseded by an import that finds nothing pending', async () => {
-    // Reproduces the abandonment, not merely the total === 0 early return: a
-    // restored library starts a details pass (5 pending, frozen mid-flight
-    // below), the user starts over and imports a different export, and the
-    // new import's own details pass finds nothing pending — e.g. TMDB was
-    // unreachable, so nothing came back with a tmdbId. The old run's progress
-    // callback and finishing block both no-op once runId moves on.
-    //
-    // On today's App.tsx, reset() already nulls fetchingDetails on its own
-    // (the only route back to the import screen), so this specific path is
-    // already covered before onImported's own fix ever runs — the mutation
-    // check below proves that by reverting *only* the onImported fix and
-    // showing this test stays green. What it does not cover is reset() itself
-    // ever losing that line — the counterfactual check further below breaks
-    // reset()'s own clear and shows onImported's fix alone keeps this green,
-    // and the bug this finding describes red, without it.
-    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Old', rating: 90 })]);
+  it('re-enables the detail sections when a restore, abandoned by an in-flight import, is superseded — no reset() involved', async () => {
+    // Path A (DropZone.tsx:25-30): `handle` awaits importFiles(files) — a
+    // file read plus a parse — with no mount check and no staleness check
+    // before calling onImported. Reproduced here by holding that one call:
+    // the restore resolves and starts its own details pass *while* an
+    // already-started import is still "reading" its file, the import screen
+    // unmounts under it, and only once the held read finishes does
+    // onImported fire and abandon the restore's pass — reset() never runs
+    // anywhere in this sequence. The abandoned run's own countPendingDetails
+    // found 5 pending before it was abandoned, so its early return (were one
+    // to fire) is irrelevant here — this is the *other* early return, the
+    // superseding import's own, at App.tsx's `if (total === 0) return;`,
+    // which is reached before the new runId guard and depends entirely on
+    // onImported's own unconditional clear to not leave the restore's stale
+    // {0, 5} frozen on screen.
+    const restoreDeferred = deferred<Film[] | null>();
+    vi.mocked(loadLibrary).mockReturnValue(restoreDeferred.promise);
     vi.mocked(loadFilters).mockResolvedValue(null);
+    const importDeferred = deferred<ImportOutcome>();
+    vi.mocked(importFiles).mockReturnValueOnce(importDeferred.promise);
     vi.mocked(countPendingDetails).mockReturnValueOnce(5).mockReturnValueOnce(0);
     const restorePass = deferred<Film[]>();
     vi.mocked(enrichDetails).mockImplementationOnce(() => restorePass.promise);
 
     render(<App />);
+
+    // Start the import while films is still null — the restore hasn't
+    // resolved yet — so this reaches DropZone's `handle` and parks it at
+    // `await importFiles(...)` before onImported is ever called.
+    await userEvent.click(screen.getByRole('button', { name: /imdb/i }));
+    const input = screen.getByLabelText(/choose a file/i);
+    await userEvent.upload(input, new File([imdbCsv], 'ratings.csv', { type: 'text/csv' }));
+    expect(importFiles).toHaveBeenCalledTimes(1);
+
+    // The restore resolves next, entirely independent of the import still in
+    // flight above it: it sets films, starts its own pass (5 pending), and
+    // the screen switches to the library view — unmounting the DropZone
+    // instance whose `handle` call is still parked, mid-file-read, above.
+    restoreDeferred.resolve([film('a', { title: 'Old', rating: 90 })]);
     await screen.findByText('Old');
-    // Three sections (Genre, Director, Runtime) all carry the identical note.
     await waitFor(() => {
       expect(screen.getAllByText(/Looking up genres and directors… 5 to go/)).toHaveLength(3);
     });
 
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
-    await importFixture();
+    // The held file read now finishes: DropZone's (unmounted) `handle` calls
+    // onImported, which abandons the restore's still-running pass and starts
+    // its own — finding nothing pending, since TMDB is unreachable in this
+    // outcome.
+    importDeferred.resolve({
+      status: 'ok',
+      films: [film('b', { title: 'New', rating: 80 })],
+      warnings: [],
+      skipped: 0,
+    });
 
+    await screen.findByText('New');
     await waitFor(() => {
       expect(screen.queryByText(/Looking up genres and directors/)).not.toBeInTheDocument();
     });
+  });
+
+  it('does not run a details pass in the background, or re-arm its progress, for a run that has already been abandoned', async () => {
+    // A second, independent path to the same symptom (App.tsx's own comment
+    // on fillInDetails calls it Path B): onImported re-checks runId before
+    // awaiting saveLibrary but not after, so a reset() landing inside that
+    // wait can clear fetchingDetails only for the *stale* run's own
+    // fillInDetails — invoked here for the first time only once the held
+    // save below resolves, well after abandonment — to proceed anyway and
+    // start a full TMDB details pass for a library nobody will ever see,
+    // re-arming fetchingDetails right after reset() just cleared it. The
+    // guard fixes this at its root, independent of the other fix above:
+    // reverting it alone (with that fix intact) still turns this test red.
+    const held = deferred<void>();
+    vi.mocked(saveLibrary).mockReturnValueOnce(held.promise);
+    vi.mocked(countPendingDetails).mockReturnValue(5);
+
+    render(<App />);
+    await importFixture();
+    await waitFor(() => expect(saveLibrary).toHaveBeenCalled());
+
+    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
+    await userEvent.click(resetButton);
+
+    held.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(enrichDetails).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Looking up genres and directors/)).not.toBeInTheDocument();
   });
 
   it('logs a failed details pass on a restored library separately from a failed restore', async () => {

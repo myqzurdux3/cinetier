@@ -83,6 +83,15 @@ export default function App() {
   const fillInDetails = useCallback(async (library: Film[], id: number) => {
     const total = countPendingDetails(library);
     if (total === 0) return;
+    // `fillInDetails` is sometimes resumed by a continuation that outlives the
+    // run it belongs to — App.tsx:149 awaits saveLibrary before calling this,
+    // without re-checking runId, so a reset() (or another import) landing
+    // inside that wait leaves this call running for an id nobody is
+    // interested in any more. Without this guard it would still start a full
+    // TMDB details pass in the background for a library nobody will see, and
+    // its own setFetchingDetails below would re-arm the rail's disabled state
+    // right after reset() had just cleared it.
+    if (runId.current !== id) return;
 
     setFetchingDetails({ done: 0, total });
     const detailed = await enrichDetails(library, (progress) => {
@@ -126,14 +135,23 @@ export default function App() {
       setSkipped(outcome.skipped);
       setEnriching({ done: 0, total: outcome.films.length });
       // A prior run's details pass (the restore's, or an earlier import's) may
-      // still be abandoned mid-flight: runId has just moved on, so its own
-      // progress callback and finishing block are about to start no-op'ing,
-      // but neither of those ever *clears* fetchingDetails, and fillInDetails's
-      // own total === 0 early return doesn't either. Cleared here, unconditionally,
-      // so this run starts from a known-clean state rather than inheriting
-      // whatever the abandoned run last wrote — the same reasoning reset()
-      // already applies for exactly this state, applied here too so this
-      // function does not rely on reset() having run first.
+      // still be abandoned mid-flight when this one starts: runId has just
+      // moved on, so its own progress callback and finishing block are about
+      // to start no-op'ing, but neither of those ever *clears* fetchingDetails,
+      // and fillInDetails's own total === 0 early return doesn't either. This
+      // is a real, reachable bug, not merely a defensive habit: onImported is
+      // reached from DropZone's `handle`, an async continuation that outlives
+      // the screen that started it and carries no staleness check of its own
+      // (only onImported and reset() ever set restoreCancelled) — so a slow
+      // restore can finish, start its own pass, and still be running when a
+      // pending import's `onImported` finally fires with no reset() in
+      // between at all. Cleared here, unconditionally, so this run starts
+      // from a known-clean state rather than inheriting whatever the
+      // abandoned run last wrote. (fillInDetails also guards its own
+      // unconditional writes against a stale id now, for the second path this
+      // same bug has: a reset() landing inside this function's own later
+      // `await saveLibrary` below can clear fetchingDetails only for the
+      // *stale* run's continuation to re-arm it afterwards.)
       setFetchingDetails(null);
 
       const enriched = await enrichLibrary(outcome.films, (progress) => {
