@@ -31,3 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Genres, directors and runtimes fetched from TMDB after posters, so a
   Letterboxd import filters on the same axes an IMDb one does.
 - The active filters are remembered between visits, in the browser.
+- A tier board: rows of ranked films, drag and drop with full keyboard
+  operation, undo and redo, and a pool built from the filtered library.
+- Pre-filling the board from imported ratings, with editable thresholds and a
+  count of what each one would place shown before it happens.
+- Rows can be renamed, recoloured, added, removed and reordered. Removing a row
+  returns its films to the pool rather than deleting them.
+- The board is remembered between visits, in the browser.

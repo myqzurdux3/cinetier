@@ -9,7 +9,7 @@ Everything runs in your browser — no account, no upload, no server.
 
 [Open Cinetier](https://myqzurdux3.github.io/cinetier/)
 
-> **Status:** in development — importing, browsing and filtering your library work today. The tier board lands next.
+> **Status:** in development — importing, browsing, filtering and ranking your library work today.
 
 </div>
 
@@ -31,6 +31,11 @@ history into a tier list you can share.
   filters show as removable chips, and if a combination leaves nothing, the
   screen names which one to drop. Your criteria are remembered between visits,
   same as your library.
+- **Rank on a board.** Default S/A/B/C/D/F rows, or your own — rename,
+  recolour, add, remove and reorder them, and removing a row returns its
+  films to the pool. Drag a film into a row, between rows, or back to the
+  pool, or do the same by keyboard. Every move can be undone and redone. The
+  board is remembered between visits, same as your library and your filters.
 - **Start from your ratings, or from nothing.** Cinetier pre-fills the tiers
   from the scores you already gave, and you drag from there — or empty the board
   and rank entirely by hand.

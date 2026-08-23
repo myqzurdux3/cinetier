@@ -59,15 +59,44 @@ title plus year, and this is the stated cost of that rule.
 `FilterCriteria` has no `minYear`/`maxYear`, and translating a range into decades answers a
 different question. A later plan can add the axis.
 
+### Named boards are the next plan, not this one
+
+Create, rename, delete and switch between several boards is Plan B of the same spec
+(`docs/superpowers/specs/2026-08-23-cinetier-tier-board-design.md`), whose data model this
+plan already built: every board carries an `id` and a `name` (`createBoard(id, name,
+tiers)`), and `services/boards.ts` keys the `boards` object store by `id`. Plan B adds a
+screen, not a migration.
+
+### PNG export and the JSON envelope are the plan after that
+
+Both are the spec's third plan, named explicitly in its own "what stays for later" line.
+This plan added no export path of any kind.
+
+### The undo history does not survive a reload
+
+Deliberate: undo that persists would let a user "undo" an edit they have no memory of
+making, possibly minutes or sessions later. A reload starts a fresh history; the board
+itself is still exactly as it was left.
+
 ### `App.tsx` stays as it is, deliberately
 
-At 259 lines, with nine state pieces, two restore effects and two enrichment passes,
-`App.tsx` is the file the filter-rail plan's reviews looked at hardest. Two reviewers
-independently judged it should not be restructured now; the seam that will eventually want
-extracting is the pair of persistence effects and their writers, not the render tree.
+At 437 lines, with eleven state pieces and five effects, `App.tsx` grew again over the
+tier-board plan — it was 259 lines and nine state pieces when the filter-rail plan's two
+reviewers first judged it. A third reviewer, on this plan, reached the same verdict: it
+should not be restructured mid-plan. All three named the same seam — the persistence
+effects and their writers, not the render tree.
 
 ## Robustness
 
+- **First to triage: a board edit can silently cancel a pending filters restore.**
+  `restoreCancelled` is one ref shared by the library, filters and board restores. Drag a
+  card — or dispatch any board edit — before `loadFilters()` resolves, and the saved filter
+  criteria are discarded without restoring: `setCriteria(restored)` never runs. Narrow
+  (a specific race), recoverable (the user still has the library and the board; only the
+  remembered filter criteria are lost), and untested. The clean fix is a separate ref for
+  the board restore. It was introduced deliberately during a fix round in this plan, and its
+  cost was accepted knowingly — but of everything this plan deferred, this is the one to
+  pick up first.
 - **A rejected enrichment leaves the progress counter on screen.** It logs, and the reset
   button is always reachable, so nobody is trapped — but the interface says it is still
   working when it has stopped.
@@ -114,6 +143,9 @@ extracting is the pair of persistence effects and their writers, not the render 
 
 ## Performance
 
+- **Rows are not virtualised.** A row holding several hundred films renders every card.
+  Deliberate: virtualising inside a row interacts badly with drag and drop, and no
+  measurement yet says it is needed.
 - **Enrichment copies the whole library per resolved film**, so a 5000-film import performs
   5000 array copies and 5000 React commits. The specification's risk table names libraries
   of that size. Batching progress — every N films, or on an animation frame — is the cheap
@@ -153,11 +185,19 @@ extracting is the pair of persistence effects and their writers, not the render 
   removal, and `NoResults`'s culprit button targets that same wrapper — which is sound
   because `FilterStatus` is mounted unconditionally in both the filtered and unfiltered
   branches.
-- **`FilmGrid`'s entrance replays on every zero-to-non-zero filter transition.** Its
-  `generation` prop is documented "changes once per import — playing the entrance again is
-  what it means", and a test pins that, but `App` unmounts `FilmGrid` whenever the filters
-  admit nothing, so it remounts with `entering` re-initialised and `generation` unchanged.
-  Cosmetic, but the invariant no longer holds.
+- ~~**`FilmGrid`'s entrance replays on every zero-to-non-zero filter transition.**~~
+  Superseded by the tier-board plan (2026-08-23): `App` no longer renders `FilmGrid`
+  directly, or unmounts it when the filters admit nothing — the board replaced the library
+  screen, and `FilmGrid`'s only caller now is `Pool`. See the next entry for what that leaves
+  behind.
+- **`FilmGrid`'s `generation` prop is now dead in production.** Nothing passes it since the
+  board replaced the grid on the library screen; only its own test file exercises it. The
+  entrance replay it powered is redundant because a new import remounts the grid anyway.
+- **`PrefillPanel` receives the unfiltered library, not the pool.** "Pre-fill from my
+  ratings" can place titles the filter rail is currently hiding, and its preview counts
+  them — the count and the placement agree with each other, just not with what the rail
+  shows on screen. Deliberate: the rail filters the pool and only the pool. User-visible,
+  and unverified by hand.
 - **`<summary>` and the checkboxes take the UA focus ring, not the accent token.** Every
   input and button in the rail carries `focus:ring-accent`; the only keyboard-operable part
   of a *closed* section does not. The specification asks for the accent ring on the section
@@ -179,6 +219,34 @@ extracting is the pair of persistence effects and their writers, not the render 
 
 ## Testing and tooling
 
+- **The tier board's manual verification gate is entirely outstanding.** The browser
+  extension this project uses for interactive checks was disconnected for the whole of this
+  plan, so Task 12's browser pass and its keyboard-only pass could not run. What was checked
+  without it: the dev server answers `200`, and the production bundle genuinely contains the
+  board rather than merely compiling — `Drop films here`, `films to place`,
+  `Pre-fill from my ratings`, `Send everything back to the pool`,
+  `Delete everything and start over`, and the announcement fragments `lifted from` and
+  `was not moved` all appear in the built JS. Nothing beyond that. No human and no real
+  browser has yet: dragged a poster with a mouse, at all; dragged from the far end of a long
+  virtualised pool; undone or redone a real edit; ranked a film by keyboard, or heard what a
+  screen reader announces while doing it; reloaded the page and watched the board come back;
+  run the IndexedDB v2-to-v3 upgrade over a real library; looked at either theme, at any
+  width; or renamed, recoloured, added, removed or reordered a row outside a test. Every one
+  of those is exercised by an automated test at the unit or component level — 477 tests
+  across 54 files, coverage above the 90/85/90/90 gate — and none of it has been exercised
+  by a person. This is the item to close before trusting anything said elsewhere in this
+  project's docs about drag and drop or keyboard operation beyond "the code implements it
+  and the tests pass."
+- **The board's save guard has an untested release path.** The debounced save is suppressed
+  (`boardReady`) until the board restore settles, and released in a `.finally()` so it fires
+  even when `loadFirstBoard()` resolves to `null` — no saved board found. That branch is
+  verified by reading the code, not by a test.
+- **No domain test covers a non-default tier list.** `tierForRating`, `prefill` and
+  `moveFilm` all operate generically on `board.tiers`, but every call to `createBoard` in the
+  test suite omits the third argument and gets `DEFAULT_TIERS`. `createBoard` has accepted a
+  custom `tiers` array since this plan's first task, so covering it would have been a few
+  lines at any point; deferred twice, and recorded here rather than promised to a task that
+  does not exist.
 - **No test pins "the grid renders before enrichment resolves"** — the property the whole
   enrichment architecture exists to provide. It rests on manual browser checks.
   `tests/ui/App.test.tsx` already has the deferred-promise machinery to do it properly.
