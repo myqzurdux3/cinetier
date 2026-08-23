@@ -44,8 +44,8 @@ films than for IMDb ones, which reads as a bug rather than a limitation.~~
 
 Closed by the filter-rail plan (2026-08-20): a second TMDB request per film, made after
 posters, fills in genres, directors and runtimes for every source. Verified by hand against
-a real Letterboxd export carrying no genres at all — it came back filterable by genre,
-alongside the rest.
+a real Letterboxd export carrying no genres at all — it came back filterable by genre, nine
+of them, fetched after the posters.
 
 ### Two same-title, same-year films can still merge
 
@@ -61,7 +61,7 @@ different question. A later plan can add the axis.
 
 ### `App.tsx` stays as it is, deliberately
 
-At 197 lines, with five state pieces, two restore effects and two enrichment passes,
+At 259 lines, with nine state pieces, two restore effects and two enrichment passes,
 `App.tsx` is the file the filter-rail plan's reviews looked at hardest. Two reviewers
 independently judged it should not be restructured now; the seam that will eventually want
 extracting is the pair of persistence effects and their writers, not the render tree.
@@ -110,10 +110,9 @@ extracting is the pair of persistence effects and their writers, not the render 
   the order of 35-40 seconds. Treat that figure as an extrapolation from six titles, not a
   measurement at scale.
 - **The rail runs eight `applyFilters` passes per render, with no memoisation, and each
-  `*Controls` component recomputes its option list on every keystroke.** Fine at export
-  scale — a 5000-film library still does only eight full passes per change — so this is a
-  known trade-off, not an oversight. Memoizing per section is the cheap fix if it is ever
-  felt.
+  `*Controls` component recomputes its option list on every keystroke.** A 5000-film library
+  therefore does eight full passes per change; unmeasured at that scale, since nothing in
+  this plan ran past six films. Memoizing per section is the cheap fix if it is ever felt.
 - ~~**The grid is fixed at six columns** regardless of viewport, so a phone renders six very
   small posters per row.~~ Superseded, then closed: the grid briefly defaulted to a fixed 8
   columns under the visual-identity plan, and the whole-branch review fix pass (2026-08-19)
@@ -149,8 +148,9 @@ extracting is the pair of persistence effects and their writers, not the render 
   possible once the library screen shipped.
 - **CI actions target a deprecated runner.** `actions/checkout@v4` and `setup-node@v4` warn;
   a bump to `@v5` clears it.
-- **`tests/ui/App.test.tsx` restores its `console.error` spy without `try/finally` in two
-  places**, so a `waitFor` timeout would leak the spy into later tests in that file.
+- **`tests/ui/App.test.tsx` restores its `console.error` spy without `try/finally` in five
+  places** (the file contains no `finally` at all), so a `waitFor` timeout would leak the spy
+  into later tests in that file.
 - **A transient "Unhandled Errors" block attributed to `tests/ui/FilmGrid.test.tsx` appeared
   in 1 of 9 full-suite runs during the filter-rail plan.** A re-review established nothing in
   the filter-rail work can produce it — that file does not render `App` — so it is

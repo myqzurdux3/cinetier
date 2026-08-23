@@ -82,11 +82,18 @@ describe('the v1 to v2 schema upgrade', () => {
       },
     });
     const saved = { films: [film('a'), film('b')], savedAt: Date.now() };
-    await v1.put('library', saved, 'current');
-    v1.close();
+    try {
+      await v1.put('library', saved, 'current');
+    } finally {
+      // Without this, a failed put leaves the v1 connection open and the next
+      // beforeEach's deleteDB blocks — the suite hangs instead of going red.
+      v1.close();
+    }
 
     const upgraded = await db();
 
+    // Deliberately pinned to today's VERSION: a bump to 3 should fail here and
+    // make whoever bumps it decide what the upgrade owes this test.
     expect(upgraded.version).toBe(2);
     expect(Array.from(upgraded.objectStoreNames).sort()).toEqual([
       'filters',

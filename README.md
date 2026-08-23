@@ -25,7 +25,7 @@ history into a tier list you can share.
   lists alike, films and series alike, in whatever language your account uses.
 - **Filter before you rank.** A rail beside your library — rating, era, type,
   genre, director, runtime, watch dates, rewatches and a top-N limit, each
-  showing how many titles it admits on its own. Only films you watched this
+  section showing how many titles it admits on its own. Only films you watched this
   year. Only those you rated above four stars. Only 1980s horror under 100
   minutes. Only the ones you liked far more than everyone else did. Active
   filters show as removable chips, and if a combination leaves nothing, the
@@ -42,8 +42,9 @@ history into a tier list you can share.
 
 Your ratings never leave your browser. There is no server and no account.
 Films are stored locally, and the only outbound requests are to TMDB, which
-receive a title, year, or IMDb identifier in order to fetch a poster — never
-your ratings and never your history.
+receive a title, year, or IMDb identifier in order to fetch a poster and,
+afterwards, its genres, director and runtime — never your ratings and never
+your history.
 
 ## Getting your data
 
