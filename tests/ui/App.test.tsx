@@ -10,6 +10,8 @@ import type { FilterCriteria } from '@/domain/filters';
 import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
 import { importFiles, type ImportOutcome } from '@/ui/import/importFiles';
 import type { Film } from '@/domain/film';
+import { saveBoard, loadFirstBoard, clearBoards } from '@/services/boards';
+import { createBoard, moveFilm } from '@/domain/tiers';
 
 vi.mock('@/services/library', () => ({
   loadLibrary: vi.fn(),
@@ -30,6 +32,12 @@ vi.mock('@/services/filters', () => ({
 vi.mock('@/enrich/enrichDetails', () => ({
   enrichDetails: vi.fn(),
   countPendingDetails: vi.fn(),
+}));
+
+vi.mock('@/services/boards', () => ({
+  saveBoard: vi.fn(),
+  loadFirstBoard: vi.fn(),
+  clearBoards: vi.fn(),
 }));
 
 // Real by default — this file otherwise deliberately drives real parsing
@@ -84,6 +92,17 @@ async function importFixture() {
   await userEvent.upload(input, new File([imdbCsv], 'ratings.csv', { type: 'text/csv' }));
 }
 
+/**
+ * "Import a different export" now only opens the confirmation dialog — reset
+ * itself happens on its destructive action. Every test below that means "and
+ * actually reset" goes through both clicks.
+ */
+async function resetLibrary() {
+  const resetButton = await screen.findByRole('button', { name: /import a different export/i });
+  await userEvent.click(resetButton);
+  await userEvent.click(screen.getByRole('button', { name: /delete everything/i }));
+}
+
 // jsdom reports every element's size as 0, so @tanstack/react-virtual's
 // viewport measurement (offsetHeight/offsetWidth) sees an empty scroll
 // container and FilmGrid renders no rows at all — see tests/ui/FilmGrid.test.tsx
@@ -129,6 +148,12 @@ beforeEach(() => {
   // mockReset() would wipe that out for every test, not just the one that
   // deliberately overrides it.
   vi.mocked(importFiles).mockClear();
+
+  // None of these tests starts with a restored board unless it says so
+  // explicitly.
+  vi.mocked(loadFirstBoard).mockReset().mockResolvedValue(null);
+  vi.mocked(saveBoard).mockReset().mockResolvedValue(undefined);
+  vi.mocked(clearBoards).mockReset().mockResolvedValue(undefined);
 });
 
 describe('App persistence', () => {
@@ -141,7 +166,9 @@ describe('App persistence', () => {
     expect(
       await screen.findByRole('button', { name: /import a different export/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/2 films/)).toBeInTheDocument();
+    // Scoped to a span: Pool's own "N films to place" count also matches
+    // /2 films/ once the board (with its pool) renders alongside the header.
+    expect(screen.getByText(/2 films/, { selector: 'span' })).toBeInTheDocument();
   });
 
   it('saves the enriched library only after enrichment settles, not before', async () => {
@@ -164,8 +191,7 @@ describe('App persistence', () => {
     vi.mocked(loadLibrary).mockResolvedValue([film('a')]);
     render(<App />);
 
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
 
     expect(clearLibrary).toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
@@ -184,8 +210,7 @@ describe('App persistence', () => {
     render(<App />);
     await importFixture();
 
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
     expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
 
     // The stale restore now resolves with the library the user just discarded.
@@ -218,8 +243,7 @@ describe('App persistence', () => {
     vi.mocked(clearLibrary).mockRejectedValue(new Error('IndexedDB is unavailable'));
 
     render(<App />);
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
 
     await waitFor(() => expect(consoleError).toHaveBeenCalled());
     // The screen still resets even though the underlying delete failed.
@@ -300,8 +324,7 @@ describe('App enrichment races', () => {
     render(<App />);
     await importFixture();
 
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
     expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
 
     // The discarded run keeps resolving films one by one, then finishes.
@@ -332,8 +355,7 @@ describe('App enrichment races', () => {
     render(<App />);
     await importFixture();
 
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
     await importFixture();
     await waitFor(() => expect(runs).toHaveLength(2));
 
@@ -634,8 +656,7 @@ describe('App filter rail', () => {
     await importFixture();
     await waitFor(() => expect(saveLibrary).toHaveBeenCalled());
 
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
 
     held.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -669,5 +690,62 @@ describe('App filter rail', () => {
     );
 
     consoleError.mockRestore();
+  });
+});
+
+describe('App board', () => {
+  it('restores a saved board and shows its placements', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    vi.mocked(loadFirstBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
+    );
+
+    render(<App />);
+
+    const row = await screen.findByRole('list', { name: /^S — 1 film$/ });
+    expect(row).toHaveTextContent('Heat');
+  });
+
+  it('does not offer undo before anything has been done', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+    expect(await screen.findByRole('button', { name: 'Undo' })).toBeDisabled();
+  });
+
+  it('asks before starting over, and names the board', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: /import a different export/i }),
+    );
+    expect(screen.getByRole('dialog')).toHaveTextContent('My ranking');
+    expect(clearBoards).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: /delete everything/i }));
+    await waitFor(() => {
+      expect(clearBoards).toHaveBeenCalled();
+    });
+  });
+
+  it('filters the pool without emptying the rows', async () => {
+    // The spec's first decision, end to end: a criterion that excludes a
+    // placed film must not remove it from its row.
+    vi.mocked(loadLibrary).mockResolvedValue([
+      film('a', { title: 'Kept', rating: 90 }),
+      film('b', { title: 'Cut', rating: 10 }),
+    ]);
+    vi.mocked(loadFirstBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'b', { tierId: 'S', index: 0 }),
+    );
+    vi.mocked(loadFilters).mockResolvedValue({ minRating: 50 });
+
+    render(<App />);
+
+    const row = await screen.findByRole('list', { name: /^S — 1 film$/ });
+    expect(row).toHaveTextContent('Cut');
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: 'Pool' })).toHaveTextContent('1 film to place');
+    });
   });
 });

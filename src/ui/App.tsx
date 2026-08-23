@@ -3,7 +3,6 @@ import { Shell } from './Shell';
 import { Landing } from './Landing';
 import type { ImportSource } from './import/SourcePicker';
 import { ImportGuide } from './import/ImportGuide';
-import { FilmGrid } from './library/FilmGrid';
 import { LibraryHeader } from './library/LibraryHeader';
 import { FilterRail } from './filters/FilterRail';
 import { FilterStatus } from './filters/FilterStatus';
@@ -15,6 +14,13 @@ import { saveFilters, loadFilters, clearFilters } from '@/services/filters';
 import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
 import type { ImportOutcome } from './import/importFiles';
 import type { Film } from '@/domain/film';
+import { boardReducer, type BoardAction } from '@/domain/board';
+import { createBoard, poolFor, type TierBoard } from '@/domain/tiers';
+import { initHistory, record, undo, redo, canUndo, canRedo, type History } from '@/domain/history';
+import { saveBoard, loadFirstBoard, clearBoards } from '@/services/boards';
+import { BoardScreen } from './board/BoardScreen';
+import { PrefillPanel } from './board/PrefillPanel';
+import { ResetConfirm } from './ResetConfirm';
 
 export default function App() {
   const [source, setSource] = useState<ImportSource | null>(null);
@@ -22,16 +28,28 @@ export default function App() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [skipped, setSkipped] = useState(0);
   const [enriching, setEnriching] = useState<{ done: number; total: number } | null>(null);
-  // Bumped once per import (not the enrichment guard's runId, which is a ref
-  // and does not re-render). This is what tells the grid to replay its
-  // entrance animation.
-  const [generation, setGeneration] = useState(0);
 
   const [criteria, setCriteria] = useState<FilterCriteria>({});
   const [fetchingDetails, setFetchingDetails] = useState<{ done: number; total: number } | null>(
     null,
   );
   const [railOpen, setRailOpen] = useState(false);
+
+  const [history, setHistory] = useState<History<TierBoard>>(() =>
+    initHistory(createBoard('board-1', 'My ranking')),
+  );
+  const [poolSearch, setPoolSearch] = useState('');
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const boardValue = history.present;
+
+  const dispatch = useCallback((action: BoardAction) => {
+    setHistory((current) => {
+      const next = boardReducer(current.present, action);
+      // An action that changed nothing must not become an undo step, or the
+      // next Ctrl+Z appears to do nothing at all.
+      return next === current.present ? current : record(current, next);
+    });
+  }, []);
 
   // Restore whatever was saved last time. `restoreCancelled` is set the moment
   // the user does anything that should win over the restore — starts an
@@ -66,6 +84,45 @@ export default function App() {
         // A lost preference costs a click. Letting it propagate would cost the page.
         console.error('Failed to restore the saved filters', error);
       });
+  }, []);
+
+  useEffect(() => {
+    loadFirstBoard()
+      .then((restored) => {
+        if (restored && !restoreCancelled.current) setHistory(initHistory(restored));
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to restore the saved board', error);
+      });
+  }, []);
+
+  useEffect(() => {
+    // Dragging produces a burst of moves; one transaction per frame of that
+    // burst would be pointless work.
+    const id = setTimeout(() => {
+      saveBoard(boardValue).catch((error: unknown) => {
+        console.error('Failed to save the board', error);
+      });
+    }, 400);
+    return () => {
+      clearTimeout(id);
+    };
+  }, [boardValue]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') return;
+      // A text field owns its own undo stack; stealing Ctrl+Z from a row's
+      // label input would be worse than not offering it.
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('input, textarea, select')) return;
+      event.preventDefault();
+      setHistory((current) => (event.shiftKey ? redo(current) : undo(current)));
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
   }, []);
 
   const updateCriteria = useCallback((next: FilterCriteria) => {
@@ -130,7 +187,6 @@ export default function App() {
       restoreCancelled.current = true;
       const id = ++runId.current;
       setFilms(outcome.films);
-      setGeneration((n) => n + 1);
       setWarnings(outcome.warnings);
       setSkipped(outcome.skipped);
       setEnriching({ done: 0, total: outcome.films.length });
@@ -173,7 +229,15 @@ export default function App() {
   // library has been imported yet.
   const visible = useMemo(() => (films ? applyFilters(films, criteria) : []), [films, criteria]);
 
-  function reset() {
+  const poolFilms = useMemo(() => {
+    const pooled = poolFor(boardValue, visible);
+    const needle = poolSearch.trim().toLowerCase();
+    return needle === ''
+      ? pooled
+      : pooled.filter((film) => film.title.toLowerCase().includes(needle));
+  }, [boardValue, visible, poolSearch]);
+
+  function performReset() {
     restoreCancelled.current = true;
     runId.current += 1;
     clearLibrary().catch((error: unknown) => {
@@ -188,6 +252,11 @@ export default function App() {
     clearFilters().catch((error: unknown) => {
       console.error('Failed to clear the saved filters', error);
     });
+    clearBoards().catch((error: unknown) => {
+      console.error('Failed to clear the saved board', error);
+    });
+    setHistory(initHistory(createBoard('board-1', 'My ranking')));
+    setPoolSearch('');
     setSource(null);
   }
 
@@ -206,8 +275,25 @@ export default function App() {
             warnings={warnings}
             skipped={skipped}
             enriching={enriching}
-            onReset={reset}
+            onReset={() => {
+              setConfirmingReset(true);
+            }}
           />
+
+          {confirmingReset && (
+            <ResetConfirm
+              filmCount={films.length}
+              boardName={boardValue.name}
+              placedCount={Object.values(boardValue.placements).flat().length}
+              onConfirm={() => {
+                setConfirmingReset(false);
+                performReset();
+              }}
+              onCancel={() => {
+                setConfirmingReset(false);
+              }}
+            />
+          )}
 
           {/* Below the rail's breakpoint the column becomes a sheet: same
               markup, opened on demand, so nothing has to render twice. */}
@@ -253,7 +339,41 @@ export default function App() {
               {filtered ? (
                 <NoResults films={films} criteria={criteria} onChange={updateCriteria} />
               ) : (
-                <FilmGrid films={visible} generation={generation} />
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHistory(undo);
+                      }}
+                      disabled={!canUndo(history)}
+                      className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent disabled:opacity-40"
+                    >
+                      Undo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHistory(redo);
+                      }}
+                      disabled={!canRedo(history)}
+                      className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent disabled:opacity-40"
+                    >
+                      Redo
+                    </button>
+                  </div>
+
+                  <PrefillPanel board={boardValue} films={films} dispatch={dispatch} />
+
+                  <BoardScreen
+                    board={boardValue}
+                    films={films}
+                    poolFilms={poolFilms}
+                    search={poolSearch}
+                    onSearchChange={setPoolSearch}
+                    dispatch={dispatch}
+                  />
+                </div>
               )}
             </div>
           </div>
