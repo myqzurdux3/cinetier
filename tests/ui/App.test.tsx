@@ -537,6 +537,44 @@ describe('App filter rail', () => {
     expect(vi.mocked(enrichDetails).mock.calls[0]![0]).toBe(enriched);
   });
 
+  it('re-enables the detail sections when an abandoned pass is superseded by an import that finds nothing pending', async () => {
+    // Reproduces the abandonment, not merely the total === 0 early return: a
+    // restored library starts a details pass (5 pending, frozen mid-flight
+    // below), the user starts over and imports a different export, and the
+    // new import's own details pass finds nothing pending — e.g. TMDB was
+    // unreachable, so nothing came back with a tmdbId. The old run's progress
+    // callback and finishing block both no-op once runId moves on.
+    //
+    // On today's App.tsx, reset() already nulls fetchingDetails on its own
+    // (the only route back to the import screen), so this specific path is
+    // already covered before onImported's own fix ever runs — the mutation
+    // check below proves that by reverting *only* the onImported fix and
+    // showing this test stays green. What it does not cover is reset() itself
+    // ever losing that line — the counterfactual check further below breaks
+    // reset()'s own clear and shows onImported's fix alone keeps this green,
+    // and the bug this finding describes red, without it.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Old', rating: 90 })]);
+    vi.mocked(loadFilters).mockResolvedValue(null);
+    vi.mocked(countPendingDetails).mockReturnValueOnce(5).mockReturnValueOnce(0);
+    const restorePass = deferred<Film[]>();
+    vi.mocked(enrichDetails).mockImplementationOnce(() => restorePass.promise);
+
+    render(<App />);
+    await screen.findByText('Old');
+    // Three sections (Genre, Director, Runtime) all carry the identical note.
+    await waitFor(() => {
+      expect(screen.getAllByText(/Looking up genres and directors… 5 to go/)).toHaveLength(3);
+    });
+
+    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
+    await userEvent.click(resetButton);
+    await importFixture();
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Looking up genres and directors/)).not.toBeInTheDocument();
+    });
+  });
+
   it('logs a failed details pass on a restored library separately from a failed restore', async () => {
     // The restore itself succeeded — the library is on screen. Only the
     // second pass over it failed, and the message should say so rather than

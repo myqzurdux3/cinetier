@@ -125,6 +125,16 @@ export default function App() {
       setWarnings(outcome.warnings);
       setSkipped(outcome.skipped);
       setEnriching({ done: 0, total: outcome.films.length });
+      // A prior run's details pass (the restore's, or an earlier import's) may
+      // still be abandoned mid-flight: runId has just moved on, so its own
+      // progress callback and finishing block are about to start no-op'ing,
+      // but neither of those ever *clears* fetchingDetails, and fillInDetails's
+      // own total === 0 early return doesn't either. Cleared here, unconditionally,
+      // so this run starts from a known-clean state rather than inheriting
+      // whatever the abandoned run last wrote — the same reasoning reset()
+      // already applies for exactly this state, applied here too so this
+      // function does not rely on reset() having run first.
+      setFetchingDetails(null);
 
       const enriched = await enrichLibrary(outcome.films, (progress) => {
         if (runId.current !== id) return;
