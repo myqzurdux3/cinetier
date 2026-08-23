@@ -52,20 +52,50 @@ describe('destinationFor', () => {
     expect(destinationFor({ type: 'card', tierId: 'S', filmId: 'ghost' }, board(), 'x')).toBeNull();
   });
 
-  it('accounts for the dragged card leaving its own row first', () => {
-    // Moving `a` (index 0) onto `c` (index 2) inside the same row: once `a`
-    // is lifted the row is [b, c] and `c` sits at index 1, so the naive
-    // answer of 2 would place `a` after `c` instead of where it was dropped.
+  it('drags a card forward past another in its own row without correcting twice', () => {
+    // Moving `a` (index 0) onto `c` (index 2) inside the same row. `moveFilm`
+    // removes `a` from the row before inserting it, so index 2 is already a
+    // post-removal index: [b, c] with `a` spliced in at 2 gives [b, c, a] —
+    // which is what dragging past `c` means, and exactly what
+    // @dnd-kit/sortable's own arrayMove(['a','b','c','d'], 0, 2) produces.
+    // Subtracting one here would correct for the removal a second time and
+    // leave `a` one slot short of where it was dropped.
     expect(destinationFor({ type: 'card', tierId: 'S', filmId: 'c' }, board(), 'a')).toEqual({
       tierId: 'S',
-      index: 1,
+      index: 2,
     });
   });
 
-  it('does not shift the index when the drag comes from another row', () => {
+  it('drags a card onto its immediate neighbour instead of doing nothing', () => {
+    // The gesture the double correction turned into a silent no-op — and the
+    // one `sortableKeyboardCoordinates` produces for the very first arrow
+    // press after a keyboard lift, since it steps one item at a time. `a`
+    // onto `b` must swap them: [b, a, c].
+    const after = moveFilm(board(), 'a', { tierId: 'S', index: 1 });
+    expect(destinationFor({ type: 'card', tierId: 'S', filmId: 'b' }, board(), 'a')).toEqual({
+      tierId: 'S',
+      index: 1,
+    });
+    expect(after.placements.S).toEqual(['b', 'a', 'c']);
+  });
+
+  it('takes the over card’s index when the drag comes from another row', () => {
+    // Nothing leaves this row, so there is no vacated slot to account for
+    // either — the same answer as the same-row case above, by a different
+    // route through the function.
     let source = board();
     source = moveFilm(source, 'z', { tierId: 'D', index: 0 });
     expect(destinationFor({ type: 'card', tierId: 'S', filmId: 'c' }, source, 'z')).toEqual({
+      tierId: 'S',
+      index: 2,
+    });
+  });
+
+  it('appends a card to its own row at the slot its own removal frees', () => {
+    // The one place the dragged card's departure still has to be accounted
+    // for: dropping onto the row itself means "the end", and once `a` is
+    // lifted the row is [b, c] whose end is index 2, not 3.
+    expect(destinationFor({ type: 'tier', tierId: 'S' }, board(), 'a')).toEqual({
       tierId: 'S',
       index: 2,
     });

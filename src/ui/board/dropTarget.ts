@@ -39,17 +39,26 @@ export function destinationFor(
   const ids = board.placements[tierId];
   if (!ids) return null;
 
-  // A film lifted out of this row is no longer occupying a position in it, so
-  // every index at or after its old one has already shifted down by one. The
-  // drop point the user aimed at is the *post-removal* index.
+  // Appending to a row the dragged film is already in: it vacates a slot on
+  // the way out, so the end of the row is one index earlier than it looks.
+  // `moveFilm` clamps an over-long index to the row's length, so both answers
+  // land in the same place — this keeps the returned index honest about what
+  // it means rather than relying on that clamp.
   const from = ids.indexOf(draggedId);
-  const shift = (index: number) => (from !== -1 && from < index ? index - 1 : index);
-
-  if (target.type === 'tier') return { tierId, index: shift(ids.length) };
+  if (target.type === 'tier') {
+    return { tierId, index: from === -1 ? ids.length : ids.length - 1 };
+  }
 
   if (target.filmId === draggedId) return null;
   const over = ids.indexOf(target.filmId);
   if (over === -1) return null;
 
-  return { tierId, index: shift(over) };
+  // The over card's index in the row *as it is drawn*, with no correction for
+  // the dragged card leaving. `moveFilm` removes the film from every tier
+  // before inserting it, exactly as @dnd-kit/sortable's own `arrayMove`
+  // splices `from` out before inserting at `to` — so the index the user aimed
+  // at is already the post-removal one, and subtracting again would turn every
+  // forward move into a move one slot short (and every drop onto the next
+  // neighbour into a no-op).
+  return { tierId, index: over };
 }
