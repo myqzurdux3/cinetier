@@ -712,6 +712,69 @@ describe('App board', () => {
     expect(await screen.findByRole('button', { name: 'Undo' })).toBeDisabled();
   });
 
+  it('does not offer undo after an action that changed nothing', async () => {
+    // The guard in dispatch says an action that changed nothing must not
+    // become an undo step, and it compares by reference — which only means
+    // anything if the reducer actually hands back the board it was given.
+    // "Send everything back to the pool" on a board with nothing placed is the
+    // cheapest way to press an action that changes nothing: the button is
+    // always offered, so it is easy to do by accident, and before this it
+    // pushed an identical board and left Ctrl+Z looking broken.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+
+    const undoButton = await screen.findByRole('button', { name: 'Undo' });
+    await userEvent.click(
+      screen.getByRole('button', { name: /send everything back to the pool/i }),
+    );
+    expect(undoButton).toBeDisabled();
+  });
+
+  it('undoes a whole rename in one step, not one character at a time', async () => {
+    // HISTORY_LIMIT is 50 and a row label holds 24 characters, so recording a
+    // history entry per keystroke lets two full renames evict an entire
+    // ranking session. Consecutive edits to the same field are one edit as far
+    // as undo is concerned — the way every text editor treats a run of typing.
+    // Ctrl+Z is deliberately declined inside an input, so the Undo button is
+    // the only route back and it must not need one click per character.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+
+    // Held by reference, not re-queried: the input's accessible name embeds
+    // the label it is editing ("Row S label"), so it changes as you type and a
+    // re-query would fail on the name rather than on the value under test.
+    const label = await screen.findByLabelText('Row S label');
+    expect(label).toHaveValue('S');
+    await userEvent.type(label, 'uper');
+    expect(label).toHaveValue('Super');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(label).toHaveValue('S');
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  });
+
+  it('keeps a rename of a different row as its own undo step', async () => {
+    // Coalescing is per field, not per action type: renaming two rows is two
+    // edits, and undo returns them one at a time.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+
+    // Held by reference, not re-queried: each input's accessible name embeds
+    // the label it is editing ("Row S label"), so it changes as you type.
+    const rowS = await screen.findByLabelText('Row S label');
+    await userEvent.type(rowS, 'x');
+    const rowA = screen.getByLabelText('Row A label');
+    // Two characters, so one Undo click distinguishes "one entry per field"
+    // from "one entry per keystroke" — with a single character both would
+    // leave the same value behind.
+    await userEvent.type(rowA, 'ce');
+    expect(rowA).toHaveValue('Ace');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(rowA).toHaveValue('A');
+    expect(rowS).toHaveValue('Sx');
+  });
+
   it('asks before starting over, and names the board', async () => {
     vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
     render(<App />);

@@ -22,6 +22,27 @@ import { BoardScreen } from './board/BoardScreen';
 import { PrefillPanel } from './board/PrefillPanel';
 import { ResetConfirm } from './ResetConfirm';
 
+/**
+ * Which text field an action is typing into, or null for an action that stands
+ * on its own. Two consecutive actions sharing a key are one edit as far as
+ * undo is concerned.
+ *
+ * Deliberately per-field rather than per-type: renaming row S and then row A
+ * are two separate edits, and undo should return them one at a time.
+ */
+function coalesceKey(action: BoardAction): string | null {
+  switch (action.type) {
+    case 'renameTier':
+      return `renameTier:${action.tierId}`;
+    case 'setThreshold':
+      return `setThreshold:${action.tierId}`;
+    case 'renameBoard':
+      return 'renameBoard';
+    default:
+      return null;
+  }
+}
+
 export default function App() {
   const [source, setSource] = useState<ImportSource | null>(null);
   const [films, setFilms] = useState<Film[] | null>(null);
@@ -42,6 +63,34 @@ export default function App() {
   const [confirmingReset, setConfirmingReset] = useState(false);
   const boardValue = history.present;
 
+  // What the last recorded edit was, and the history it was recorded into.
+  //
+  // The key identifies "the same text field being typed into": consecutive
+  // edits that share one collapse into a single undo step, the way every text
+  // editor treats a run of typing. Without it, a 24-character row label eats
+  // 24 of HISTORY_LIMIT's 50 entries and two renames evict a whole ranking
+  // session — and the Ctrl+Z handler below deliberately declines to act inside
+  // an input, so the only way back would be the Undo button, one character per
+  // click.
+  //
+  // `base` is what makes this safe inside a state updater. React invokes
+  // updaters twice under StrictMode (and may re-run them when a render is
+  // discarded), so a naive `lastEdit.current = key` would see its own write on
+  // the second pass and coalesce an edit it had just recorded, losing the
+  // entry. Holding the history the entry was recorded *into* makes the second
+  // pass recognisable — it arrives with that very same object — so it takes
+  // the same branch and produces the same result.
+  const lastEdit = useRef<{ key: string; base: History<TierBoard> } | null>(null);
+
+  const stepHistory = useCallback((step: (current: History<TierBoard>) => History<TierBoard>) => {
+    // Undo and redo end the run of typing: coalescing a later keystroke into
+    // an entry the user has just stepped away from would rewrite the present
+    // without clearing the future, leaving a redo pointing at a state that no
+    // longer follows from it.
+    lastEdit.current = null;
+    setHistory(step);
+  }, []);
+
   const dispatch = useCallback((action: BoardAction) => {
     // A real edit — even to the freshly-created default board, before any
     // restore has resolved — always wins: over a slow board restore, which
@@ -53,8 +102,23 @@ export default function App() {
     setHistory((current) => {
       const next = boardReducer(current.present, action);
       // An action that changed nothing must not become an undo step, or the
-      // next Ctrl+Z appears to do nothing at all.
-      return next === current.present ? current : record(current, next);
+      // next Ctrl+Z appears to do nothing at all. Every reducer branch returns
+      // the board it was given when it changes nothing, so this reference
+      // check covers a move that lands where the film already was, a rename to
+      // the same text, a re-clear of an empty board and a row "moved" to its
+      // own index — not just the unknown-id early returns it used to catch.
+      if (next === current.present) return current;
+
+      const key = coalesceKey(action);
+      if (key !== null && lastEdit.current?.key === key && lastEdit.current.base !== current) {
+        // Still typing in the same field: replace the present instead of
+        // pushing another entry. The future is already empty — the entry this
+        // continues cleared it when it was recorded.
+        return { ...current, present: next };
+      }
+
+      lastEdit.current = key === null ? null : { key, base: current };
+      return record(current, next);
     });
   }, []);
 
@@ -146,13 +210,13 @@ export default function App() {
       const target = event.target;
       if (target instanceof HTMLElement && target.closest('input, textarea, select')) return;
       event.preventDefault();
-      setHistory((current) => (event.shiftKey ? redo(current) : undo(current)));
+      stepHistory((current) => (event.shiftKey ? redo(current) : undo(current)));
     }
     window.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, []);
+  }, [stepHistory]);
 
   const updateCriteria = useCallback((next: FilterCriteria) => {
     setCriteria(next);
@@ -285,6 +349,9 @@ export default function App() {
       console.error('Failed to clear the saved board', error);
     });
     boardReady.current = false;
+    // The fresh board has no entry for a later keystroke to coalesce into, so
+    // leaving a stale key here would swallow the first rename after a reset.
+    lastEdit.current = null;
     setHistory(initHistory(createBoard('board-1', 'My ranking')));
     setPoolSearch('');
     setSource(null);
@@ -374,7 +441,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
-                        setHistory(undo);
+                        stepHistory(undo);
                       }}
                       disabled={!canUndo(history)}
                       className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent disabled:opacity-40"
@@ -384,7 +451,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
-                        setHistory(redo);
+                        stepHistory(redo);
                       }}
                       disabled={!canRedo(history)}
                       className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent disabled:opacity-40"
