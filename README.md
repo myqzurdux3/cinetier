@@ -34,8 +34,10 @@ history into a tier list you can share.
 - **Rank on a board.** Default S/A/B/C/D/F rows, or your own — rename,
   recolour, add, remove and reorder them, and removing a row returns its
   films to the pool. Drag a film into a row, between rows, or back to the
-  pool, or do the same by keyboard. Every move can be undone and redone. The
-  board is remembered between visits, same as your library and your filters.
+  pool. Every move can be undone and redone. The board is remembered between
+  visits, same as your library and your filters. Keyboard operation is built
+  in — space to lift, arrows to move, space to drop — but it has not yet been
+  confirmed by hand, so treat it as untested rather than promised.
 - **Start from your ratings, or from nothing.** Cinetier pre-fills the tiers
   from the scores you already gave, and you drag from there — or empty the board
   and rank entirely by hand.
