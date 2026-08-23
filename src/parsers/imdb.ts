@@ -101,6 +101,7 @@ export function parseImdbRatings(csvText: string): ParseResult {
       runtimeMinutes: parseNumber(row['Runtime (mins)']),
       publicRating,
       posterPath: null,
+      detailsFetched: false,
       source: 'imdb',
     });
   }

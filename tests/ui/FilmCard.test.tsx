@@ -21,6 +21,7 @@ function film(overrides: Partial<Film> = {}): Film {
     runtimeMinutes: null,
     publicRating: null,
     posterPath: null,
+    detailsFetched: false,
     source: 'imdb',
     ...overrides,
   };

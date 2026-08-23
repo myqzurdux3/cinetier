@@ -30,6 +30,8 @@ function mergeFilm(base: Film, incoming: Film): Film {
     runtimeMinutes: base.runtimeMinutes ?? incoming.runtimeMinutes,
     publicRating: base.publicRating ?? incoming.publicRating,
     posterPath: base.posterPath ?? incoming.posterPath,
+    // Either record having been enriched means the merged film has been.
+    detailsFetched: base.detailsFetched || incoming.detailsFetched,
   };
 }
 
@@ -81,6 +83,7 @@ function foldKey(film: Film): string {
     film.runtimeMinutes ?? '',
     film.publicRating ?? '',
     film.posterPath ?? '',
+    film.detailsFetched,
   ].join('\u0000');
 }
 

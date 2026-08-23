@@ -12,6 +12,10 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   test: {
+    // Pinned to a negative-offset zone so a date test that only distinguishes
+    // local midnight from UTC midnight east of Greenwich (or at UTC itself)
+    // actually discriminates, here and in CI.
+    env: { TZ: 'America/New_York' },
     projects: [
       {
         extends: true,

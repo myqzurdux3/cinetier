@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Shell } from './Shell';
 import { Landing } from './Landing';
 import type { ImportSource } from './import/SourcePicker';
 import { ImportGuide } from './import/ImportGuide';
 import { FilmGrid } from './library/FilmGrid';
 import { LibraryHeader } from './library/LibraryHeader';
+import { FilterRail } from './filters/FilterRail';
+import { FilterStatus } from './filters/FilterStatus';
+import { NoResults } from './filters/NoResults';
 import { enrichLibrary } from '@/enrich/enrichLibrary';
 import { saveLibrary, loadLibrary, clearLibrary } from '@/services/library';
+import { applyFilters, activeCriteria, type FilterCriteria } from '@/domain/filters';
+import { saveFilters, loadFilters, clearFilters } from '@/services/filters';
+import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
 import type { ImportOutcome } from './import/importFiles';
 import type { Film } from '@/domain/film';
 
@@ -20,6 +26,12 @@ export default function App() {
   // and does not re-render). This is what tells the grid to replay its
   // entrance animation.
   const [generation, setGeneration] = useState(0);
+
+  const [criteria, setCriteria] = useState<FilterCriteria>({});
+  const [fetchingDetails, setFetchingDetails] = useState<{ done: number; total: number } | null>(
+    null,
+  );
+  const [railOpen, setRailOpen] = useState(false);
 
   // Restore whatever was saved last time. `restoreCancelled` is set the moment
   // the user does anything that should win over the restore — starts an
@@ -43,36 +55,123 @@ export default function App() {
   const runId = useRef(0);
 
   useEffect(() => {
+    loadFilters()
+      .then((restored) => {
+        // Mirrors the library restore's own guard: a user who has already
+        // imported or reset wins over a filters restore that is merely slow,
+        // not the other way around.
+        if (restored && !restoreCancelled.current) setCriteria(restored);
+      })
+      .catch((error: unknown) => {
+        // A lost preference costs a click. Letting it propagate would cost the page.
+        console.error('Failed to restore the saved filters', error);
+      });
+  }, []);
+
+  const updateCriteria = useCallback((next: FilterCriteria) => {
+    setCriteria(next);
+    // Writing {} back would restore as a filtered view that admits everything.
+    const written = activeCriteria(next).length > 0 ? saveFilters(next) : clearFilters();
+    written.catch((error: unknown) => {
+      console.error('Failed to save the filters', error);
+    });
+  }, []);
+
+  // The second pass. It runs after the poster pass rather than beside it: the
+  // grid is useless without posters and merely less filterable without genres,
+  // and running both at once doubles the requests in flight.
+  const fillInDetails = useCallback(async (library: Film[], id: number) => {
+    const total = countPendingDetails(library);
+    if (total === 0) return;
+    // `fillInDetails` is sometimes resumed by a continuation that outlives the
+    // run it belongs to — App.tsx:149 awaits saveLibrary before calling this,
+    // without re-checking runId, so a reset() (or another import) landing
+    // inside that wait leaves this call running for an id nobody is
+    // interested in any more. Without this guard it would still start a full
+    // TMDB details pass in the background for a library nobody will see, and
+    // its own setFetchingDetails below would re-arm the rail's disabled state
+    // right after reset() had just cleared it.
+    if (runId.current !== id) return;
+
+    setFetchingDetails({ done: 0, total });
+    const detailed = await enrichDetails(library, (progress) => {
+      if (runId.current !== id) return;
+      setFilms(progress.films);
+      setFetchingDetails({ done: progress.done, total: progress.total });
+    });
+
+    if (runId.current !== id) return;
+    setFilms(detailed);
+    setFetchingDetails(null);
+    await saveLibrary(detailed);
+  }, []);
+
+  useEffect(() => {
     loadLibrary()
       .then((restored) => {
-        if (restored && !restoreCancelled.current) setFilms(restored);
+        if (!restored || restoreCancelled.current) return;
+        setFilms(restored);
+        const id = ++runId.current;
+        // Given its own catch, separate from the one below: a failure here is
+        // "the details pass on a restored library failed", not "the restore
+        // itself failed" — the library still restored fine.
+        fillInDetails(restored, id).catch((error: unknown) => {
+          console.error('Failed to fetch details for the restored library', error);
+        });
       })
       .catch((error: unknown) => {
         console.error('Failed to restore the saved library', error);
       });
-  }, []);
+  }, [fillInDetails]);
 
-  const onImported = useCallback(async (outcome: ImportOutcome) => {
-    if (outcome.status !== 'ok') return;
-    restoreCancelled.current = true;
-    const id = ++runId.current;
-    setFilms(outcome.films);
-    setGeneration((n) => n + 1);
-    setWarnings(outcome.warnings);
-    setSkipped(outcome.skipped);
-    setEnriching({ done: 0, total: outcome.films.length });
+  const onImported = useCallback(
+    async (outcome: ImportOutcome) => {
+      if (outcome.status !== 'ok') return;
+      restoreCancelled.current = true;
+      const id = ++runId.current;
+      setFilms(outcome.films);
+      setGeneration((n) => n + 1);
+      setWarnings(outcome.warnings);
+      setSkipped(outcome.skipped);
+      setEnriching({ done: 0, total: outcome.films.length });
+      // A prior run's details pass (the restore's, or an earlier import's) may
+      // still be abandoned mid-flight when this one starts: runId has just
+      // moved on, so its own progress callback and finishing block are about
+      // to start no-op'ing, but neither of those ever *clears* fetchingDetails,
+      // and fillInDetails's own total === 0 early return doesn't either. This
+      // is a real, reachable bug, not merely a defensive habit: onImported is
+      // reached from DropZone's `handle`, an async continuation that outlives
+      // the screen that started it and carries no staleness check of its own
+      // (only onImported and reset() ever set restoreCancelled) — so a slow
+      // restore can finish, start its own pass, and still be running when a
+      // pending import's `onImported` finally fires with no reset() in
+      // between at all. Cleared here, unconditionally, so this run starts
+      // from a known-clean state rather than inheriting whatever the
+      // abandoned run last wrote. (fillInDetails also guards its own
+      // unconditional writes against a stale id now, for the second path this
+      // same bug has: a reset() landing inside this function's own later
+      // `await saveLibrary` below can clear fetchingDetails only for the
+      // *stale* run's continuation to re-arm it afterwards.)
+      setFetchingDetails(null);
 
-    const enriched = await enrichLibrary(outcome.films, (progress) => {
+      const enriched = await enrichLibrary(outcome.films, (progress) => {
+        if (runId.current !== id) return;
+        setFilms(progress.films);
+        setEnriching({ done: progress.done, total: progress.total });
+      });
+
       if (runId.current !== id) return;
-      setFilms(progress.films);
-      setEnriching({ done: progress.done, total: progress.total });
-    });
+      setFilms(enriched);
+      setEnriching(null);
+      await saveLibrary(enriched);
+      await fillInDetails(enriched, id);
+    },
+    [fillInDetails],
+  );
 
-    if (runId.current !== id) return;
-    setFilms(enriched);
-    setEnriching(null);
-    await saveLibrary(enriched);
-  }, []);
+  // Before the early return, so the hook order never depends on whether a
+  // library has been imported yet.
+  const visible = useMemo(() => (films ? applyFilters(films, criteria) : []), [films, criteria]);
 
   function reset() {
     restoreCancelled.current = true;
@@ -84,10 +183,21 @@ export default function App() {
     setWarnings([]);
     setSkipped(0);
     setEnriching(null);
+    setCriteria({});
+    setFetchingDetails(null);
+    clearFilters().catch((error: unknown) => {
+      console.error('Failed to clear the saved filters', error);
+    });
     setSource(null);
   }
 
   if (films !== null) {
+    // NoResults is only coherent when a criterion is actually cutting films —
+    // with no active criterion, `visible.length === 0` means the library
+    // itself is empty, and "Nothing matches these filters" would name the
+    // wrong cause and offer a "Clear all filters" button that clears nothing.
+    const filtered = activeCriteria(criteria).length > 0 && visible.length === 0;
+
     return (
       <Shell>
         <div className="mx-auto max-w-7xl space-y-4 px-6 py-8">
@@ -98,7 +208,55 @@ export default function App() {
             enriching={enriching}
             onReset={reset}
           />
-          <FilmGrid films={films} generation={generation} />
+
+          {/* Below the rail's breakpoint the column becomes a sheet: same
+              markup, opened on demand, so nothing has to render twice. */}
+          <button
+            type="button"
+            onClick={() => setRailOpen((open) => !open)}
+            aria-expanded={railOpen}
+            aria-controls="filter-rail"
+            className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink lg:hidden"
+          >
+            Filters
+          </button>
+
+          <div className="flex flex-col gap-4 lg:flex-row">
+            <aside
+              id="filter-rail"
+              className={`${railOpen ? 'block' : 'hidden'} shrink-0 lg:block lg:w-64`}
+            >
+              <FilterRail
+                films={films}
+                criteria={criteria}
+                onChange={updateCriteria}
+                fetchingDetails={fetchingDetails}
+              />
+            </aside>
+
+            <div className="min-w-0 flex-1 space-y-3">
+              {/* Always mounted — see FilterStatus's own comment on its live
+                  region: unmounting it at exactly the moment results drop to
+                  zero would silence the one announcement it exists to make.
+                  Its own "Clear all filters" button is suppressed instead,
+                  since NoResults renders an equivalent one of its own while
+                  results are zero — the two must never coexist under the
+                  same accessible name, but the live region must never stop
+                  existing. */}
+              <FilterStatus
+                films={films}
+                visible={visible}
+                criteria={criteria}
+                onChange={updateCriteria}
+                showClearAll={!filtered}
+              />
+              {filtered ? (
+                <NoResults films={films} criteria={criteria} onChange={updateCriteria} />
+              ) : (
+                <FilmGrid films={visible} generation={generation} />
+              )}
+            </div>
+          </div>
         </div>
       </Shell>
     );

@@ -9,7 +9,7 @@ Everything runs in your browser — no account, no upload, no server.
 
 [Open Cinetier](https://myqzurdux3.github.io/cinetier/)
 
-> **Status:** in development — importing and browsing your library work today. Filtering and the tier board land next.
+> **Status:** in development — importing, browsing and filtering your library work today. The tier board lands next.
 
 </div>
 
@@ -23,9 +23,14 @@ history into a tier list you can share.
 - **Import your own data.** Drop in an IMDb export or a Letterboxd export
   `.zip`, exactly as those services give it to you — ratings, watchlists and
   lists alike, films and series alike, in whatever language your account uses.
-- **Filter before you rank.** Only films you watched this year. Only those you
-  rated above four stars. Only 1980s horror under 100 minutes. Only the ones you
-  liked far more than everyone else did.
+- **Filter before you rank.** A rail beside your library — rating, era, type,
+  genre, director, runtime, watch dates, rewatches and a top-N limit, each
+  section showing how many titles it admits on its own. Only films you watched this
+  year. Only those you rated above four stars. Only 1980s horror under 100
+  minutes. Only the ones you liked far more than everyone else did. Active
+  filters show as removable chips, and if a combination leaves nothing, the
+  screen names which one to drop. Your criteria are remembered between visits,
+  same as your library.
 - **Start from your ratings, or from nothing.** Cinetier pre-fills the tiers
   from the scores you already gave, and you drag from there — or empty the board
   and rank entirely by hand.
@@ -37,8 +42,9 @@ history into a tier list you can share.
 
 Your ratings never leave your browser. There is no server and no account.
 Films are stored locally, and the only outbound requests are to TMDB, which
-receive a title, year, or IMDb identifier in order to fetch a poster — never
-your ratings and never your history.
+receive a title, year, or IMDb identifier in order to fetch a poster and,
+afterwards, its genres, director and runtime — never your ratings and never
+your history.
 
 ## Getting your data
 

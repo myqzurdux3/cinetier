@@ -24,3 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Import screen: drop an IMDb `ratings.csv` or a Letterboxd export `.zip` and see your library.
 - Posters and public ratings from TMDB, filled in progressively and cached locally.
 - The imported library is remembered between visits.
+- A filter rail over the whole library: rating, era, type, genre, director,
+  runtime, watch dates, rewatches and a top-N limit, each section showing how
+  many titles it admits on its own, with the active filters as removable chips
+  and a screen that names the criterion doing the cutting when nothing matches.
+- Genres, directors and runtimes fetched from TMDB after posters, so a
+  Letterboxd import filters on the same axes an IMDb one does.
+- The active filters are remembered between visits, in the browser.

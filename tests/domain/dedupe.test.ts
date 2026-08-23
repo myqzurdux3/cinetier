@@ -22,6 +22,7 @@ function film(overrides: Partial<Film> & Pick<Film, 'title'>): Film {
     runtimeMinutes: null,
     publicRating: null,
     posterPath: null,
+    detailsFetched: false,
     source: 'imdb',
     ...overrides,
   };
@@ -303,6 +304,41 @@ describe('mergeLibraries', () => {
       rating: 80,
     });
     expect(result[0]?.watchedAt).toEqual(new Date('2024-01-01'));
+  });
+
+  it('remembers that details were fetched, whichever record carries the flag', () => {
+    // Both directions, deliberately. With the IMDb record as the merge base, an
+    // implementation that simply kept `base.detailsFetched` would pass the first
+    // case and fail the second — which is the whole point of the OR.
+    const fromImdb = mergeLibraries(
+      [film({ title: 'Heat', year: 1995, imdbId: 'tt0113277', detailsFetched: true })],
+      [film({ title: 'Heat', year: 1995, imdbId: null, source: 'letterboxd' })],
+    );
+    expect(fromImdb).toHaveLength(1);
+    expect(fromImdb[0]!.detailsFetched).toBe(true);
+
+    const fromLetterboxd = mergeLibraries(
+      [film({ title: 'Heat', year: 1995, imdbId: 'tt0113277' })],
+      [
+        film({
+          title: 'Heat',
+          year: 1995,
+          imdbId: null,
+          source: 'letterboxd',
+          detailsFetched: true,
+        }),
+      ],
+    );
+    expect(fromLetterboxd).toHaveLength(1);
+    expect(fromLetterboxd[0]!.detailsFetched).toBe(true);
+  });
+
+  it('leaves detailsFetched false when neither record was enriched', () => {
+    const merged = mergeLibraries(
+      [film({ title: 'Heat', year: 1995, imdbId: 'tt0113277' })],
+      [film({ title: 'Heat', year: 1995, imdbId: null, source: 'letterboxd' })],
+    );
+    expect(merged[0]!.detailsFetched).toBe(false);
   });
 });
 

@@ -22,6 +22,7 @@ function film(id: string, rating: number | null): Film {
     runtimeMinutes: null,
     publicRating: null,
     posterPath: null,
+    detailsFetched: false,
     source: 'imdb',
   };
 }

@@ -233,4 +233,9 @@ describe('parseImdbRatings', () => {
     expect(film).toBeDefined();
     expect(film!.watchedAt).toBeNull();
   });
+
+  it('marks every imported film as not yet enriched with details', () => {
+    const result = parseImdbRatings(fixture);
+    expect(result.films.every((f) => f.detailsFetched === false)).toBe(true);
+  });
 });

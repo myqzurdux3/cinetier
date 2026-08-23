@@ -73,6 +73,7 @@ function blankFilm(slug: string, row: Record<string, string>): Film {
     runtimeMinutes: null,
     publicRating: null,
     posterPath: null,
+    detailsFetched: false,
     source: 'letterboxd',
   };
 }

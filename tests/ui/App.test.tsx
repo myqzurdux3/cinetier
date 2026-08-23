@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import App from '@/ui/App';
 import { loadLibrary, saveLibrary, clearLibrary } from '@/services/library';
 import { enrichLibrary, type EnrichProgress } from '@/enrich/enrichLibrary';
+import { loadFilters, saveFilters, clearFilters } from '@/services/filters';
+import type { FilterCriteria } from '@/domain/filters';
+import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
+import { importFiles, type ImportOutcome } from '@/ui/import/importFiles';
 import type { Film } from '@/domain/film';
 
 vi.mock('@/services/library', () => ({
@@ -17,9 +21,30 @@ vi.mock('@/enrich/enrichLibrary', () => ({
   enrichLibrary: vi.fn(),
 }));
 
+vi.mock('@/services/filters', () => ({
+  loadFilters: vi.fn(),
+  saveFilters: vi.fn(),
+  clearFilters: vi.fn(),
+}));
+
+vi.mock('@/enrich/enrichDetails', () => ({
+  enrichDetails: vi.fn(),
+  countPendingDetails: vi.fn(),
+}));
+
+// Real by default — this file otherwise deliberately drives real parsing
+// (see importFixture() below) — wrapped only so one test (Path A, in the
+// "App enrichment races" section) can delay a single call to reproduce a
+// restore resolving *during* an in-flight file read, which nothing else in
+// this file can control.
+vi.mock('@/ui/import/importFiles', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/ui/import/importFiles')>();
+  return { ...actual, importFiles: vi.fn(actual.importFiles) };
+});
+
 const imdbCsv = readFileSync('tests/fixtures/imdb-ratings.csv', 'utf8');
 
-function film(id: string): Film {
+function film(id: string, overrides: Partial<Film> = {}): Film {
   return {
     id,
     imdbId: null,
@@ -37,7 +62,9 @@ function film(id: string): Film {
     runtimeMinutes: null,
     publicRating: null,
     posterPath: null,
+    detailsFetched: false,
     source: 'imdb',
+    ...overrides,
   };
 }
 
@@ -57,6 +84,16 @@ async function importFixture() {
   await userEvent.upload(input, new File([imdbCsv], 'ratings.csv', { type: 'text/csv' }));
 }
 
+// jsdom reports every element's size as 0, so @tanstack/react-virtual's
+// viewport measurement (offsetHeight/offsetWidth) sees an empty scroll
+// container and FilmGrid renders no rows at all — see tests/ui/FilmGrid.test.tsx
+// for the same stub. The new filter-rail tests below assert on film titles
+// that FilmGrid renders, so they need it here too.
+beforeEach(() => {
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 800 });
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 1200 });
+});
+
 beforeEach(() => {
   vi.mocked(loadLibrary).mockReset().mockResolvedValue(null);
   vi.mocked(saveLibrary).mockReset().mockResolvedValue(undefined);
@@ -69,6 +106,29 @@ beforeEach(() => {
       onProgress({ films, done: films.length, total: films.length });
       return films;
     });
+
+  // None of these tests starts filtered unless it says so explicitly.
+  vi.mocked(loadFilters).mockReset().mockResolvedValue(null);
+  vi.mocked(saveFilters).mockReset().mockResolvedValue(undefined);
+  vi.mocked(clearFilters).mockReset().mockResolvedValue(undefined);
+
+  // Default: nothing pending, so tests that don't care about the details pass
+  // don't have to manage it — every film() fixture carries tmdbId: null, which
+  // never needs details in the real pass either. Tests that want to see the
+  // pass run set this explicitly.
+  vi.mocked(countPendingDetails).mockReset().mockReturnValue(0);
+  vi.mocked(enrichDetails)
+    .mockReset()
+    .mockImplementation(async (films, onProgress) => {
+      onProgress({ films, done: films.length, total: films.length });
+      return films;
+    });
+
+  // Cleared, not reset: this mock's factory-time implementation already
+  // calls through to the real parser (see the vi.mock call above), and
+  // mockReset() would wipe that out for every test, not just the one that
+  // deliberately overrides it.
+  vi.mocked(importFiles).mockClear();
 });
 
 describe('App persistence', () => {
@@ -307,6 +367,306 @@ describe('App enrichment races', () => {
     await waitFor(() => expect(consoleError).toHaveBeenCalled());
     // The library the user just imported is still on screen.
     expect(screen.getByRole('button', { name: /import a different export/i })).toBeInTheDocument();
+
+    consoleError.mockRestore();
+  });
+});
+
+describe('App filter rail', () => {
+  it('filters the grid by the restored criteria', async () => {
+    // Restored criteria have to reach the grid, not merely the rail: a rail
+    // that shows a filter the grid ignores is worse than no rail.
+    vi.mocked(loadLibrary).mockResolvedValue([
+      film('a', { title: 'Kept', rating: 90 }),
+      film('b', { title: 'Cut', rating: 10 }),
+    ]);
+    vi.mocked(loadFilters).mockResolvedValue({ minRating: 80 });
+
+    render(<App />);
+
+    expect(await screen.findByText('Kept')).toBeInTheDocument();
+    // Both the loadFilters and loadLibrary restores are async, and nothing
+    // guarantees which settles first — assert this like any other eventual
+    // state, not as a synchronous fact that merely happens to hold today
+    // because of effect declaration order.
+    await waitFor(() => expect(screen.queryByText('Cut')).not.toBeInTheDocument());
+    expect(screen.getByText('1 of 2 titles')).toBeInTheDocument();
+  });
+
+  it('saves the criteria as they change', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
+    vi.mocked(loadFilters).mockResolvedValue(null);
+    render(<App />);
+    await screen.findByText('Kept');
+
+    fireEvent.change(screen.getByLabelText('Minimum rating'), { target: { value: '50' } });
+
+    await waitFor(() => {
+      expect(saveFilters).toHaveBeenCalledWith(expect.objectContaining({ minRating: 50 }));
+    });
+  });
+
+  it('forgets the criteria when the last one is cleared', async () => {
+    // Rather than persisting an empty object, which would restore as a
+    // filtered view that admits everything.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
+    vi.mocked(loadFilters).mockResolvedValue({ minRating: 80 });
+    render(<App />);
+    await screen.findByText('Kept');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
+
+    await waitFor(() => {
+      expect(clearFilters).toHaveBeenCalled();
+    });
+  });
+
+  it('shows the library when the criteria cannot be read at all', async () => {
+    // Private browsing, a blocked database, a failed upgrade. Losing a
+    // preference must not cost the page. Also asserts the rejection was
+    // actually caught (not merely harmless in this run): an unhandled
+    // rejection wouldn't fail this expectation, only the test file as a
+    // whole, which would point at the wrong line.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
+    vi.mocked(loadFilters).mockRejectedValue(new Error('storage is blocked'));
+
+    render(<App />);
+
+    expect(await screen.findByText('Kept')).toBeInTheDocument();
+    await waitFor(() => expect(consoleError).toHaveBeenCalled());
+
+    consoleError.mockRestore();
+  });
+
+  it('does not reinstate criteria from a filters restore that resolves after an import wins', async () => {
+    // Mirrors "does not let a stale restore repopulate the screen after a
+    // reset" for the library restore below: the filters restore has the
+    // identical failure mode (a slow promise outliving the action that
+    // should pre-empt it) and needs the identical restoreCancelled guard.
+    const filtersDeferred = deferred<FilterCriteria | null>();
+    vi.mocked(loadFilters).mockReturnValue(filtersDeferred.promise);
+
+    render(<App />);
+    await importFixture();
+    await screen.findByRole('button', { name: /import a different export/i });
+
+    // The stale restore now resolves with criteria that would exclude
+    // everything the user just imported, if it were allowed to apply.
+    filtersDeferred.resolve({ minRating: 999 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByText('Nothing matches these filters.')).not.toBeInTheDocument();
+  });
+
+  it('explains an empty result instead of showing an empty grid', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 10 })]);
+    vi.mocked(loadFilters).mockResolvedValue({ minRating: 90 });
+
+    render(<App />);
+
+    expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument();
+  });
+
+  it('does not show the empty-library explainer for a genuinely empty library', async () => {
+    // Distinct from the case above: no criterion is active, so `visible` is
+    // empty because the library itself is, not because a filter cut it. The
+    // rail's "Nothing matches these filters" message would be the wrong
+    // explanation, and its "Clear all filters" button would clear nothing.
+    vi.mocked(loadLibrary).mockResolvedValue([]);
+    vi.mocked(loadFilters).mockResolvedValue(null);
+
+    render(<App />);
+
+    // A positive marker that the library screen actually rendered — not
+    // merely that loadLibrary was called, which is satisfied the instant the
+    // effect fires and says nothing about what ended up on screen.
+    await screen.findByRole('button', { name: /import a different export/i });
+    expect(screen.queryByText('Nothing matches these filters.')).not.toBeInTheDocument();
+  });
+
+  it(
+    'never shows two buttons named "Clear all filters" at once, and keeps announcing ' +
+      'the count when results drop to zero',
+    async () => {
+      // FilterStatus's own clear-all chip and NoResults's clear-all button
+      // are both accessible-name "Clear all filters" — if both mounted at
+      // once, `getByRole('button', { name: 'Clear all filters' })`, used by
+      // "forgets the criteria when the last one is cleared" above, would
+      // throw on an ambiguous match. FilterStatus itself, though, must never
+      // unmount over this transition: its live region is what announces the
+      // count dropping to zero, and an unmount-remount announces nothing to
+      // a screen reader even though a fresh query would still find a node.
+      vi.mocked(loadLibrary).mockResolvedValue([
+        film('a', { title: 'Kept', rating: 90 }),
+        film('b', { title: 'Cut', rating: 10 }),
+      ]);
+      vi.mocked(loadFilters).mockResolvedValue(null);
+
+      render(<App />);
+      await screen.findByText('Kept');
+
+      // Captured once, reused below rather than re-queried — identity is
+      // part of the contract, the same as FilterStatus's own unit test.
+      const region = screen.getByText('2 of 2 titles');
+
+      fireEvent.change(screen.getByLabelText('Minimum rating'), { target: { value: '95' } });
+
+      await screen.findByText('Nothing matches these filters.');
+      expect(region).toBeInTheDocument();
+      expect(region).toHaveTextContent('0 of 2 titles');
+      expect(screen.getAllByRole('button', { name: 'Clear all filters' })).toHaveLength(1);
+    },
+  );
+
+  it('runs the details pass over a restored library', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
+    vi.mocked(loadFilters).mockResolvedValue(null);
+    // Simulates a record with pending details — every film() fixture has
+    // tmdbId: null, which the real countPendingDetails would treat as never
+    // pending, so this is overridden here rather than in the shared default.
+    vi.mocked(countPendingDetails).mockReturnValue(1);
+
+    render(<App />);
+    await screen.findByText('Kept');
+
+    await waitFor(() => {
+      expect(enrichDetails).toHaveBeenCalled();
+    });
+  });
+
+  it('runs the details pass over a freshly imported library, using what enrichment produced', async () => {
+    // Pins the ordering this pass documents for itself: details run after
+    // the poster pass, over its output — not beside it, and not over the
+    // raw parsed import.
+    const enriched = [film('with-poster', { title: 'Heat', posterPath: '/heat.jpg' })];
+    vi.mocked(enrichLibrary).mockImplementation(async (_films, onProgress) => {
+      onProgress({ films: enriched, done: enriched.length, total: enriched.length });
+      return enriched;
+    });
+    vi.mocked(countPendingDetails).mockReturnValue(1);
+
+    render(<App />);
+    await importFixture();
+
+    await waitFor(() => expect(enrichDetails).toHaveBeenCalled());
+    expect(vi.mocked(enrichDetails).mock.calls[0]![0]).toBe(enriched);
+  });
+
+  it('re-enables the detail sections when a restore, abandoned by an in-flight import, is superseded — no reset() involved', async () => {
+    // Path A (DropZone.tsx:25-30): `handle` awaits importFiles(files) — a
+    // file read plus a parse — with no mount check and no staleness check
+    // before calling onImported. Reproduced here by holding that one call:
+    // the restore resolves and starts its own details pass *while* an
+    // already-started import is still "reading" its file, the import screen
+    // unmounts under it, and only once the held read finishes does
+    // onImported fire and abandon the restore's pass — reset() never runs
+    // anywhere in this sequence. The abandoned run's own countPendingDetails
+    // found 5 pending before it was abandoned, so its early return (were one
+    // to fire) is irrelevant here — this is the *other* early return, the
+    // superseding import's own, at App.tsx's `if (total === 0) return;`,
+    // which is reached before the new runId guard and depends entirely on
+    // onImported's own unconditional clear to not leave the restore's stale
+    // {0, 5} frozen on screen.
+    const restoreDeferred = deferred<Film[] | null>();
+    vi.mocked(loadLibrary).mockReturnValue(restoreDeferred.promise);
+    vi.mocked(loadFilters).mockResolvedValue(null);
+    const importDeferred = deferred<ImportOutcome>();
+    vi.mocked(importFiles).mockReturnValueOnce(importDeferred.promise);
+    vi.mocked(countPendingDetails).mockReturnValueOnce(5).mockReturnValueOnce(0);
+    const restorePass = deferred<Film[]>();
+    vi.mocked(enrichDetails).mockImplementationOnce(() => restorePass.promise);
+
+    render(<App />);
+
+    // Start the import while films is still null — the restore hasn't
+    // resolved yet — so this reaches DropZone's `handle` and parks it at
+    // `await importFiles(...)` before onImported is ever called.
+    await userEvent.click(screen.getByRole('button', { name: /imdb/i }));
+    const input = screen.getByLabelText(/choose a file/i);
+    await userEvent.upload(input, new File([imdbCsv], 'ratings.csv', { type: 'text/csv' }));
+    expect(importFiles).toHaveBeenCalledTimes(1);
+
+    // The restore resolves next, entirely independent of the import still in
+    // flight above it: it sets films, starts its own pass (5 pending), and
+    // the screen switches to the library view — unmounting the DropZone
+    // instance whose `handle` call is still parked, mid-file-read, above.
+    restoreDeferred.resolve([film('a', { title: 'Old', rating: 90 })]);
+    await screen.findByText('Old');
+    await waitFor(() => {
+      expect(screen.getAllByText(/Looking up genres and directors… 5 to go/)).toHaveLength(3);
+    });
+
+    // The held file read now finishes: DropZone's (unmounted) `handle` calls
+    // onImported, which abandons the restore's still-running pass and starts
+    // its own — finding nothing pending, since TMDB is unreachable in this
+    // outcome.
+    importDeferred.resolve({
+      status: 'ok',
+      films: [film('b', { title: 'New', rating: 80 })],
+      warnings: [],
+      skipped: 0,
+    });
+
+    await screen.findByText('New');
+    await waitFor(() => {
+      expect(screen.queryByText(/Looking up genres and directors/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('does not run a details pass in the background, or re-arm its progress, for a run that has already been abandoned', async () => {
+    // A second, independent path to the same symptom (App.tsx's own comment
+    // on fillInDetails calls it Path B): onImported re-checks runId before
+    // awaiting saveLibrary but not after, so a reset() landing inside that
+    // wait can clear fetchingDetails only for the *stale* run's own
+    // fillInDetails — invoked here for the first time only once the held
+    // save below resolves, well after abandonment — to proceed anyway and
+    // start a full TMDB details pass for a library nobody will ever see,
+    // re-arming fetchingDetails right after reset() just cleared it. The
+    // guard fixes this at its root, independent of the other fix above:
+    // reverting it alone (with that fix intact) still turns this test red.
+    const held = deferred<void>();
+    vi.mocked(saveLibrary).mockReturnValueOnce(held.promise);
+    vi.mocked(countPendingDetails).mockReturnValue(5);
+
+    render(<App />);
+    await importFixture();
+    await waitFor(() => expect(saveLibrary).toHaveBeenCalled());
+
+    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
+    await userEvent.click(resetButton);
+
+    held.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(enrichDetails).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Looking up genres and directors/)).not.toBeInTheDocument();
+  });
+
+  it('logs a failed details pass on a restored library separately from a failed restore', async () => {
+    // The restore itself succeeded — the library is on screen. Only the
+    // second pass over it failed, and the message should say so rather than
+    // implicating the restore that worked fine.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
+    vi.mocked(countPendingDetails).mockReturnValue(1);
+    vi.mocked(enrichDetails).mockRejectedValue(new Error('TMDB is unreachable'));
+
+    render(<App />);
+    await screen.findByText('Kept');
+
+    await waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        'Failed to fetch details for the restored library',
+        expect.any(Error),
+      );
+    });
+    expect(consoleError).not.toHaveBeenCalledWith(
+      'Failed to restore the saved library',
+      expect.anything(),
+    );
 
     consoleError.mockRestore();
   });
