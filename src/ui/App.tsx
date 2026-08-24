@@ -35,6 +35,7 @@ import {
 } from '@/services/boards';
 import { BoardScreen } from './board/BoardScreen';
 import { ExportButton } from './board/ExportButton';
+import { download } from './board/download';
 import { BoardBar } from './board/BoardBar';
 import { PrefillPanel } from './board/PrefillPanel';
 import { ResetConfirm } from './ResetConfirm';
@@ -336,6 +337,20 @@ export default function App() {
       setWarnings(outcome.warnings);
       setSkipped(outcome.skipped);
       setEnriching({ done: 0, total: outcome.films.length });
+      // A Cinetier `.json` carries a ranking as well as a library. It replaces
+      // whatever is on screen, and becomes the board the debounced save writes
+      // — under the id the file gave it, so re-importing the same file twice
+      // updates one board rather than accumulating copies of it.
+      if (outcome.board) {
+        lastEdit.current = null;
+        boardEdited.current = true;
+        boardReady.current = true;
+        setHistory(initHistory(outcome.board));
+        saveCurrentBoardId(outcome.board.id).catch((error: unknown) => {
+          console.error('Failed to remember which board is current', error);
+        });
+        refreshBoards(outcome.board.id);
+      }
       // A prior run's details pass (the restore's, or an earlier import's) may
       // still be abandoned mid-flight when this one starts: runId has just
       // moved on, so its own progress callback and finishing block are about
@@ -368,7 +383,7 @@ export default function App() {
       await saveLibrary(enriched);
       await fillInDetails(enriched, id);
     },
-    [fillInDetails],
+    [fillInDetails, refreshBoards],
   );
 
   // Before the early return, so the hook order never depends on whether a
@@ -466,6 +481,24 @@ export default function App() {
     boardEdited.current = true;
     setHistory(initHistory(replacement));
     setOtherBoards((current) => current.filter((board) => board.id !== replacement.id));
+  }
+
+  /**
+   * The library and the board on screen, as a file to carry elsewhere.
+   *
+   * The whole library, not only the films the board places: a ranking arriving
+   * somewhere with an empty pool beside it is half of what was saved, and the
+   * poster paths it carries mean the other browser draws it without asking
+   * TMDB again.
+   */
+  async function saveBoardFile() {
+    // Loaded on demand, like the other parsers: writing the file and reading
+    // it back live in the same module, and neither is needed to draw a board.
+    const { buildEnvelope, envelopeFilename } = await import('@/parsers/envelope');
+    const blob = new Blob([buildEnvelope(films ?? [], boardValue, new Date())], {
+      type: 'application/json',
+    });
+    download(blob, envelopeFilename(boardValue.name));
   }
 
   function performReset() {
@@ -590,6 +623,9 @@ export default function App() {
                   onCreate={createNewBoard}
                   onDuplicate={duplicateCurrentBoard}
                   onDelete={deleteCurrentBoard}
+                  onSaveFile={() => {
+                    void saveBoardFile();
+                  }}
                 />
 
                 <div className="flex flex-wrap gap-2">

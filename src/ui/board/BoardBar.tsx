@@ -10,6 +10,7 @@ interface BoardBarProps {
   onCreate: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onSaveFile: () => void;
 }
 
 const BUTTON =
@@ -31,6 +32,7 @@ export function BoardBar({
   onCreate,
   onDuplicate,
   onDelete,
+  onSaveFile,
 }: BoardBarProps) {
   const nameId = useId();
   const pickerId = useId();
@@ -78,6 +80,9 @@ export function BoardBar({
 
       <button type="button" className={BUTTON} onClick={onCreate}>
         New board
+      </button>
+      <button type="button" className={BUTTON} onClick={onSaveFile}>
+        Save as a file
       </button>
       <button type="button" className={BUTTON} onClick={onDuplicate}>
         Duplicate

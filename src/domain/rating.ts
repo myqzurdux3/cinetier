@@ -1,4 +1,11 @@
-export type RatingScale = 'imdb10' | 'letterboxd5';
+/**
+ * A tuple, not a bare union, so the members can be enumerated at runtime.
+ * Validating a file this application wrote needs to ask "is this one of
+ * them?", and a type alone cannot answer that.
+ */
+export const RATING_SCALES = ['imdb10', 'letterboxd5'] as const;
+
+export type RatingScale = (typeof RATING_SCALES)[number];
 
 interface ScaleDefinition {
   min: number;

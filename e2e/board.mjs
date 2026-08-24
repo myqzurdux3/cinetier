@@ -513,6 +513,74 @@ check('a board can be renamed, and the name reaches the exported file', async (p
   eq(download.suggestedFilename(), 'cinetier-best-of-the-90s.png', 'the downloaded file name');
 });
 
+check('a board saved to a file comes back after everything is deleted', async (page) => {
+  // The point of the file: carry a ranking to another browser, or back to this
+  // one after starting over. Nothing short of actually deleting everything and
+  // reading the file back proves it.
+  await importLibrary(page);
+  await drag(page, poolCard(page, 'Alpha'), rowList(page, 'S'));
+  await drag(page, poolCard(page, 'Bravo'), rowList(page, 'A'));
+  const name = page.getByLabel('Board name');
+  await name.fill('');
+  await name.type('Carried over', { delay: 15 });
+  await page.waitForTimeout(400);
+  const before = await rows(page);
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 60_000 }),
+    page.getByRole('button', { name: 'Save as a file' }).click(),
+  ]);
+  eq(download.suggestedFilename(), 'cinetier-carried-over.json', 'the downloaded file name');
+  const stream = await download.createReadStream();
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  const saved = Buffer.concat(chunks);
+
+  // Everything, deliberately: library, filters and every board.
+  await page.getByRole('button', { name: /import a different export/i }).click();
+  await page.getByRole('button', { name: /delete everything/i }).click();
+  await page.waitForTimeout(800);
+  await page.getByRole('button', { name: /IMDb/ }).click();
+  await page.waitForSelector('input[type=file]');
+  await page.setInputFiles('input[type=file]', {
+    name: 'cinetier-carried-over.json',
+    mimeType: 'application/json',
+    buffer: saved,
+  });
+  await page.waitForSelector('section[aria-label="Pool"]');
+  await page.waitForTimeout(1200);
+
+  eq(await rows(page), before, 'the ranking read back from the file');
+  eq(await page.getByLabel('Board name').inputValue(), 'Carried over', 'the board name');
+
+  // And it is the board the next save writes, not a copy beside it.
+  await page.waitForTimeout(800);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('section[aria-label="Pool"]');
+  await page.waitForTimeout(1200);
+  eq(await rows(page), before, 'the ranking after a reload');
+  if (await page.getByLabel('Switch board').count()) {
+    throw new Error('importing the file left more than one board behind');
+  }
+});
+
+check('a damaged file is refused with something to do about it', async (page) => {
+  await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: /IMDb/ }).click();
+  await page.waitForSelector('input[type=file]');
+  await page.setInputFiles('input[type=file]', {
+    name: 'broken.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{"cinetier": 1, "films": "not a list"}'),
+  });
+  await page.waitForTimeout(900);
+
+  const text = await page.locator('main').innerText();
+  if (!/not a Cinetier export/i.test(text))
+    throw new Error(`no explanation: ${text.slice(0, 160)}`);
+  if (!/Save as a file/i.test(text)) throw new Error('no hint about where such a file comes from');
+});
+
 let failed = 0;
 for (const { name, run } of checks) {
   const { browser, page, errors } = await open();

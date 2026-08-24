@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { Uint8ArrayReader, Uint8ArrayWriter, ZipWriter } from '@zip.js/zip.js';
 import { importFiles } from '@/ui/import/importFiles';
+import { buildEnvelope } from '@/parsers/envelope';
+import { createBoard, moveFilm } from '@/domain/tiers';
+import type { Film } from '@/domain/film';
 
 const imdbCsv = readFileSync('tests/fixtures/imdb-ratings.csv', 'utf8');
 const diaryCsv = readFileSync('tests/fixtures/letterboxd-diary.csv', 'utf8');
@@ -175,5 +178,69 @@ describe('importFiles', () => {
   it('reports an empty selection', async () => {
     const outcome = await importFiles([]);
     expect(outcome.status).toBe('error');
+  });
+});
+
+describe('a Cinetier .json', () => {
+  const board = moveFilm(createBoard('b-saved', 'Carried over'), 'imdb:tt0133093', {
+    tierId: 'S',
+    index: 0,
+  });
+  const films: Film[] = [
+    {
+      id: 'imdb:tt0133093',
+      imdbId: 'tt0133093',
+      tmdbId: 603,
+      title: 'The Matrix',
+      year: 1999,
+      titleType: 'movie',
+      rating: 90,
+      ratingScale: 'imdb10',
+      watchedAt: new Date('2024-06-01T00:00:00.000Z'),
+      watchedAtIsApproximate: true,
+      isRewatch: false,
+      genres: ['Action'],
+      directors: ['The Wachowskis'],
+      runtimeMinutes: 136,
+      publicRating: 82,
+      posterPath: '/matrix.jpg',
+      detailsFetched: true,
+      source: 'imdb',
+    },
+  ];
+  const saved = buildEnvelope(films, board, new Date('2026-08-24T12:00:00.000Z'));
+
+  it('brings back the library and the ranking with it', async () => {
+    const outcome = await importFiles([new File([saved], 'cinetier-mine.json')]);
+
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') return;
+    expect(outcome.films).toEqual(films);
+    expect(outcome.board).toEqual(board);
+  });
+
+  it('is recognised by its extension, not by guessing at its contents', async () => {
+    // The name is the only thing that separates it from a CSV here, and
+    // renaming it to .csv should fail loudly rather than half-parse as one.
+    const outcome = await importFiles([new File([saved], 'cinetier-mine.csv')]);
+    expect(outcome.status).toBe('error');
+  });
+
+  it('reports a damaged file as an error with a hint, not as a crash', async () => {
+    const outcome = await importFiles([new File(['{"cinetier":1}'], 'broken.json')]);
+
+    expect(outcome.status).toBe('error');
+    if (outcome.status !== 'error') return;
+    expect(outcome.message).toMatch(/not a Cinetier export/i);
+    expect(outcome.hint).toMatch(/Save as a file/i);
+  });
+
+  it('carries no board when the file was an ordinary export', async () => {
+    // `board` being absent is what tells App to leave the board alone; an
+    // empty default one here would wipe a ranking on every CSV import.
+    const outcome = await importFiles([file('ratings.csv', imdbCsv)]);
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') return;
+    expect(outcome.board).toBeUndefined();
   });
 });
