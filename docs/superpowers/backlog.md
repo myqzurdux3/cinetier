@@ -180,6 +180,27 @@ effects and their writers, not the render tree.
 
 ## Interface and copy
 
+- **A row's five edit controls are always on screen, on every row.** At 1280px they fit one
+  line and cost about thirty pixels a row; at 390px they wrap to three lines and a row
+  becomes 185px of mostly buttons. Collapsing them behind a per-row disclosure is the
+  obvious move, and the reason it was not done here is that jsdom does not hide the content
+  of a closed `<details>` from `getByRole` — every existing control test would keep passing
+  while clicking something a person cannot reach. Worth doing with that gap named and a
+  browser check standing in for it.
+- **`pointerWithin` and the pinned pool share the bottom of the screen with dnd-kit's
+  auto-scroll band.** dnd-kit scrolls the window when the pointer is inside roughly the
+  bottom quarter of the viewport, and the pool sits there, so moving a card towards the
+  pool to drop it scrolls the rows behind it. The drop still lands in the pool, since the
+  pool is pinned and stays under the cursor, but the page moving underneath is
+  disorienting. Narrowing the auto-scroll threshold, or excluding the pool's rect from it,
+  would settle it.
+- **Pre-fill reads the whole library, not the filtered view.** This is the decision the spec
+  took, and it is defensible — thresholds are about ratings, not about what the rail is
+  showing. What it looks like from the outside is less defensible: with a filter admitting
+  3 of 10 titles, pressing the button places all 10 and the pool drops to "0 films to
+  place", so seven titles the user cannot see moved without a word. The panel's summary now
+  states the count it will place, which helps; naming the set it draws from would help more.
+
 - **`LibrarySummary`'s progress is a conditionally mounted live region** — the pattern that
   was fixed in `DropZone` because screen readers frequently do not announce it. The naive
   fix is wrong here: a polite region over a per-film counter would announce hundreds of
@@ -228,29 +249,27 @@ effects and their writers, not the render tree.
 
 ## Testing and tooling
 
-- **The tier board's manual verification gate is entirely outstanding.** The browser
-  extension this project uses for interactive checks was disconnected for the whole of this
-  plan, so Task 12's browser pass and its keyboard-only pass could not run. What was checked
-  without it: the dev server answers `200`, and the production bundle genuinely contains the
-  board rather than merely compiling — `Drop films here`, `films to place`,
-  `Pre-fill from my ratings`, `Send everything back to the pool`,
-  `Delete everything and start over`, and the announcement fragments `lifted from` and
-  `was not moved` all appear in the built JS. Nothing beyond that. No human and no real
-  browser has yet: dragged a poster with a mouse, at all; dragged from the far end of a long
-  virtualised pool; undone or redone a real edit; ranked a film by keyboard, or heard what a
-  screen reader announces while doing it; reloaded the page and watched the board come back;
-  run the IndexedDB v2-to-v3 upgrade over a real library; looked at either theme, at any
-  width; or renamed, recoloured, added, removed or reordered a row outside a test. Every one
-  of those is exercised by an automated test at the unit or component level — 490 tests
-  across 54 files, coverage above the 90/85/90/90 gate — and none of it has been exercised
-  by a person. Added to that list by the branch's fix wave: **nobody has looked at the drag
-  overlay.** A `<DragOverlay>` now draws the dragged card — the standard mitigation for a
-  drag that starts in the virtualised pool and outlives its own source element — and a test
-  pins that it renders the dragged film while a drag is live. That it *looks* like the card
-  it copies, that it sits under the pointer, and that it does not double up with the source
-  card's own transform are all unverified in any browser. This is the item to close before
-  trusting anything said elsewhere in this project's docs about drag and drop or keyboard
-  operation beyond "the code implements it and the tests pass."
+- ~~**The tier board's manual verification gate is entirely outstanding.**~~ Closed on
+  2026-08-24. The Chrome extension was still not connected, so the pass ran through a real
+  Chromium driven by Playwright from the scratchpad instead — a genuine browser with real
+  pointer events, which is what drag and drop needs. Verified by hand there: pool to row,
+  row to row, forward and backward inside one row, and row back to pool, all landing where
+  aimed; the drag overlay tracking the cursor one-for-one, sized like the card, gone on
+  drop; undo and redo from both the buttons and Ctrl+Z / Ctrl+Shift+Z; a full keyboard
+  ranking (space, arrows, space) with the announcements read back at each step; the board
+  surviving a reload; a rename and a recolour done by typing, surviving a reload together
+  with the ranking; dragging the *last* card of a 120-film virtualised pool; adding,
+  removing, reordering rows and sending everything back to the pool; both themes at 1440px
+  and at 390px with no horizontal overflow; and the IndexedDB v2-to-v3 upgrade over a
+  hand-built v2 database, which kept three films with their `watchedAt` still a `Date`,
+  kept the saved filter criteria, and added the `boards` store. Three defects came out of
+  it and are fixed on this branch: the tier palette never reaching the browser, the pool
+  taking 78vh so no row was ever on screen with it, and `closestCenter` dropping a film
+  into whichever row's centre was nearest rather than the one under the cursor.
+
+  Still not done by a person: listening to an actual screen reader. What was checked is the
+  text of the live region at each step, which is what a screen reader would read, not the
+  reading itself.
 - **The board's save guard has an untested release path.** The debounced save is suppressed
   (`boardReady`) until the board restore settles, and released in a `.finally()` so it fires
   even when `loadFirstBoard()` resolves to `null` — no saved board found. That branch is

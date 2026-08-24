@@ -35,15 +35,20 @@ history into a tier list you can share.
   recolour, add, remove and reorder them, and removing a row returns its
   films to the pool. Drag a film into a row, between rows, or back to the
   pool. Every move can be undone and redone. The board is remembered between
-  visits, same as your library and your filters. Keyboard operation is built
-  in — space to lift, arrows to move, space to drop — but it has not yet been
-  confirmed by hand, so treat it as untested rather than promised.
+  visits, same as your library and your filters. The pool stays pinned to the
+  bottom of the screen while the rows scroll past it, so a row and the pool
+  are always in view together. Keyboard operation works the same way — space
+  to lift, arrows to move, space to drop — and has been driven end to end in
+  a browser, not only in tests.
 - **Start from your ratings, or from nothing.** Cinetier pre-fills the tiers
   from the scores you already gave, and you drag from there — or empty the board
   and rank entirely by hand.
-- **Export a PNG** to share, and keep as many saved tier lists as you like.
 - **Two looks.** Salle obscure by default, or a neon video-shop palette —
   remembered between visits, and neither one asks the network for a font.
+
+Not yet: exporting the board as an image, and keeping more than one saved tier
+list. One board is saved and restored between visits; both of those are on the
+backlog.
 
 ## Privacy
 
