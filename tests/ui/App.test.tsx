@@ -10,7 +10,16 @@ import type { FilterCriteria } from '@/domain/filters';
 import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
 import { importFiles, type ImportOutcome } from '@/ui/import/importFiles';
 import type { Film } from '@/domain/film';
-import { saveBoard, loadFirstBoard, clearBoards } from '@/services/boards';
+import {
+  saveBoard,
+  loadBoard,
+  loadCurrentBoard,
+  listBoards,
+  deleteBoard,
+  saveCurrentBoardId,
+  newBoardId,
+  clearBoards,
+} from '@/services/boards';
 import { createBoard, moveFilm, type TierBoard } from '@/domain/tiers';
 
 vi.mock('@/services/library', () => ({
@@ -36,7 +45,12 @@ vi.mock('@/enrich/enrichDetails', () => ({
 
 vi.mock('@/services/boards', () => ({
   saveBoard: vi.fn(),
-  loadFirstBoard: vi.fn(),
+  loadBoard: vi.fn(),
+  loadCurrentBoard: vi.fn(),
+  listBoards: vi.fn(),
+  deleteBoard: vi.fn(),
+  saveCurrentBoardId: vi.fn(),
+  newBoardId: vi.fn(),
   clearBoards: vi.fn(),
 }));
 
@@ -151,9 +165,155 @@ beforeEach(() => {
 
   // None of these tests starts with a restored board unless it says so
   // explicitly.
-  vi.mocked(loadFirstBoard).mockReset().mockResolvedValue(null);
+  vi.mocked(loadCurrentBoard).mockReset().mockResolvedValue(null);
+  vi.mocked(loadBoard).mockReset().mockResolvedValue(null);
+  vi.mocked(listBoards).mockReset().mockResolvedValue([]);
+  vi.mocked(deleteBoard).mockReset().mockResolvedValue(undefined);
+  vi.mocked(saveCurrentBoardId).mockReset().mockResolvedValue(undefined);
   vi.mocked(saveBoard).mockReset().mockResolvedValue(undefined);
   vi.mocked(clearBoards).mockReset().mockResolvedValue(undefined);
+  // Ids that sort in creation order, as the real one does, without a clock.
+  let made = 0;
+  vi.mocked(newBoardId)
+    .mockReset()
+    .mockImplementation(() => `z-new-${String((made += 1))}`);
+});
+
+describe('App named boards', () => {
+  const library = [film('a', { title: 'Heat' }), film('b', { title: 'Dune' })];
+
+  async function openLibrary() {
+    vi.mocked(loadLibrary).mockResolvedValue(library);
+    render(<App />);
+    await screen.findByRole('button', { name: /import a different export/i });
+  }
+
+  const boardName = () => screen.getByLabelText('Board name');
+  const picker = () => screen.queryByLabelText('Switch board');
+
+  it('offers no picker while there is only one board', async () => {
+    // A control that cannot choose is furniture, and this row sits above the
+    // board on every screen.
+    await openLibrary();
+    expect(boardName()).toHaveValue('My ranking');
+    expect(picker()).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete board' })).toBeDisabled();
+  });
+
+  it('creates a second board with the next free name, and switches to it', async () => {
+    await openLibrary();
+    await userEvent.click(screen.getByRole('button', { name: 'New board' }));
+
+    expect(boardName()).toHaveValue('My ranking 2');
+    expect(picker()).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete board' })).toBeEnabled();
+    // Every film is back in the pool: the new board is empty, not a view of
+    // the old one.
+    expect(screen.getByRole('region', { name: 'Pool' })).toHaveTextContent('2 films to place');
+  });
+
+  it('writes the board being left before putting another on screen', async () => {
+    // The debounced save is keyed on the board, so switching cancels one that
+    // was still pending — an edit made in the last four hundred milliseconds
+    // would leave with the board and never arrive anywhere.
+    vi.mocked(loadCurrentBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
+    );
+    await openLibrary();
+    vi.mocked(saveBoard).mockClear();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New board' }));
+
+    const written = vi.mocked(saveBoard).mock.calls.map(([board]) => board);
+    expect(
+      written.some((board) => board.id === 'board-1' && board.placements['S']?.[0] === 'a'),
+    ).toBe(true);
+  });
+
+  it("keeps each board's placements when switching between them", async () => {
+    vi.mocked(loadCurrentBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'First'), 'a', { tierId: 'S', index: 0 }),
+    );
+    await openLibrary();
+    expect(screen.getByRole('list', { name: /^S — 1 film$/ })).toHaveTextContent('Heat');
+
+    await userEvent.click(screen.getByRole('button', { name: 'New board' }));
+    expect(screen.getByRole('list', { name: /^S — 0 films$/ })).toBeInTheDocument();
+
+    await userEvent.selectOptions(picker()!, 'board-1');
+    expect(screen.getByRole('list', { name: /^S — 1 film$/ })).toHaveTextContent('Heat');
+    expect(boardName()).toHaveValue('First');
+  });
+
+  it('duplicates a board with its films, under a name of its own', async () => {
+    vi.mocked(loadCurrentBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
+    );
+    await openLibrary();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
+
+    expect(boardName()).toHaveValue('Mine 2');
+    expect(screen.getByRole('list', { name: /^S — 1 film$/ })).toHaveTextContent('Heat');
+  });
+
+  it('an edit to a duplicate leaves the board it was copied from alone', async () => {
+    vi.mocked(loadCurrentBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
+    );
+    await openLibrary();
+    await userEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /send everything back to the pool/i }),
+    );
+    expect(screen.getByRole('list', { name: /^S — 0 films$/ })).toBeInTheDocument();
+
+    await userEvent.selectOptions(picker()!, 'board-1');
+    expect(screen.getByRole('list', { name: /^S — 1 film$/ })).toHaveTextContent('Heat');
+  });
+
+  it('deletes the board on screen and opens another', async () => {
+    await openLibrary();
+    await userEvent.click(screen.getByRole('button', { name: 'New board' }));
+    expect(boardName()).toHaveValue('My ranking 2');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete board' }));
+
+    expect(deleteBoard).toHaveBeenCalledWith('z-new-1');
+    expect(boardName()).toHaveValue('My ranking');
+    expect(picker()).not.toBeInTheDocument();
+  });
+
+  it('renaming the board renames it in the picker as it is typed', async () => {
+    await openLibrary();
+    await userEvent.click(screen.getByRole('button', { name: 'New board' }));
+
+    await userEvent.clear(boardName());
+    await userEvent.type(boardName(), 'Horror');
+
+    expect(boardName()).toHaveValue('Horror');
+    expect(picker()).toHaveTextContent('Horror');
+  });
+
+  it('undo does not reach across a switch', async () => {
+    // An entry recorded on the board being left would restore it *into* the
+    // one arriving. The edit before the switch is what makes this discriminate
+    // — with no history to carry over, undo is disabled either way.
+    vi.mocked(loadCurrentBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
+    );
+    await openLibrary();
+    await userEvent.click(
+      screen.getByRole('button', { name: /send everything back to the pool/i }),
+    );
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New board' }));
+
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Redo' })).toBeDisabled();
+  });
 });
 
 describe('App persistence', () => {
@@ -716,7 +876,7 @@ describe('App filter rail', () => {
 describe('App board', () => {
   it('restores a saved board and shows its placements', async () => {
     vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
-    vi.mocked(loadFirstBoard).mockResolvedValue(
+    vi.mocked(loadCurrentBoard).mockResolvedValue(
       moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
     );
 
@@ -772,7 +932,7 @@ describe('App board', () => {
     const filtersDeferred = deferred<FilterCriteria | null>();
     vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat', rating: 10 })]);
     vi.mocked(loadFilters).mockReturnValue(filtersDeferred.promise);
-    vi.mocked(loadFirstBoard).mockResolvedValue(
+    vi.mocked(loadCurrentBoard).mockResolvedValue(
       moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
     );
 
@@ -881,7 +1041,7 @@ describe('App board', () => {
     // guard in App's dispatch, so it exercises the code path this test is
     // about just as well.
     vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
-    vi.mocked(loadFirstBoard).mockResolvedValue(
+    vi.mocked(loadCurrentBoard).mockResolvedValue(
       moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
     );
     render(<App />);
@@ -950,7 +1110,7 @@ describe('App board', () => {
       film('b', { title: 'Cut', rating: 10 }),
       film('c', { title: 'AlsoCut', rating: 20 }),
     ]);
-    vi.mocked(loadFirstBoard).mockResolvedValue(
+    vi.mocked(loadCurrentBoard).mockResolvedValue(
       moveFilm(createBoard('board-1', 'Mine'), 'b', { tierId: 'S', index: 0 }),
     );
     vi.mocked(loadFilters).mockResolvedValue({ minRating: 50 });
@@ -966,12 +1126,12 @@ describe('App board', () => {
 
   it('does not autosave the fresh default board while a slower restore is still pending', async () => {
     // Regression: the debounced save fires 400ms after mount regardless of
-    // whether loadFirstBoard() has resolved yet. Without a guard, that save
+    // whether loadCurrentBoard() has resolved yet. Without a guard, that save
     // would write the empty default board over whatever was actually saved
     // last time — a tab closed in that window loses it for good, and the app
     // would write a board record even for someone who never opened one.
     const boardDeferred = deferred<TierBoard | null>();
-    vi.mocked(loadFirstBoard).mockReturnValue(boardDeferred.promise);
+    vi.mocked(loadCurrentBoard).mockReturnValue(boardDeferred.promise);
     vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
 
     render(<App />);

@@ -25,12 +25,22 @@ export interface CinetierDB extends DBSchema {
     key: string;
     value: TierBoard;
   };
+  /**
+   * Small named values that are neither the library nor a board: at the moment
+   * only which board the user was last looking at. A store of its own rather
+   * than a corner of another one, so a later setting does not have to pretend
+   * to be a filter or a board to get saved.
+   */
+  settings: {
+    key: string;
+    value: string;
+  };
 }
 
 const NAME = 'cinetier';
-const VERSION = 3;
+const VERSION = 4;
 
-const STORES = ['tmdb', 'tmdbDetails', 'library', 'filters', 'boards'] as const;
+const STORES = ['tmdb', 'tmdbDetails', 'library', 'filters', 'boards', 'settings'] as const;
 
 let connection: Promise<IDBPDatabase<CinetierDB>> | null = null;
 

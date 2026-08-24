@@ -345,7 +345,7 @@ check('the board exports a PNG', async (page) => {
   if (width < 200 || height < 200) throw new Error(`the image is ${width}x${height}`);
 });
 
-check('the v2 database is upgraded without losing anything', async (page) => {
+check('a v2 database is upgraded to the current one without losing anything', async (page) => {
   // Version-independent upgrade: create what is missing, never branch on the
   // version that arrived.
   await page.route('**/blank-for-seeding', (route) =>
@@ -450,13 +450,67 @@ check('the v2 database is upgraded without losing anything', async (page) => {
 
   eq(
     state.stores,
-    ['boards', 'filters', 'library', 'tmdb', 'tmdbDetails'],
+    ['boards', 'filters', 'library', 'settings', 'tmdb', 'tmdbDetails'],
     'the stores after upgrading',
   );
   eq(state.titles, ['Old Alpha'], 'the library after upgrading');
   eq(state.criteria, { minRating: 20 }, 'the criteria after upgrading');
-  if (state.version < 3) throw new Error(`still at version ${String(state.version)}`);
+  if (state.version < 4) throw new Error(`still at version ${String(state.version)}`);
   if (!state.watchedAtIsDate) throw new Error('watchedAt came back as something other than a Date');
+});
+
+check('a second board keeps its own ranking, and survives a reload', async (page) => {
+  // Two boards, each with a different film in row S, switched between and then
+  // reloaded. What this is really guarding is the write on the way out: the
+  // debounced save is keyed on the board, so switching cancels one that was
+  // still pending, and an edit made in the last four hundred milliseconds
+  // would leave with the board and never arrive anywhere.
+  await importLibrary(page);
+  await drag(page, poolCard(page, 'Alpha'), rowList(page, 'S'));
+  eq((await rows(page)).S, ['Alpha'], 'the first board');
+
+  await page.getByRole('button', { name: 'New board' }).click();
+  await page.waitForTimeout(400);
+  const name = page.getByLabel('Board name');
+  if ((await name.inputValue()) !== 'My ranking 2') {
+    throw new Error(`the new board is called "${await name.inputValue()}"`);
+  }
+  eq((await rows(page)).S, [], 'the second board starts empty');
+
+  await drag(page, poolCard(page, 'Bravo'), rowList(page, 'S'));
+  eq((await rows(page)).S, ['Bravo'], 'the second board');
+
+  await page.getByLabel('Switch board').selectOption({ label: 'My ranking' });
+  await page.waitForTimeout(500);
+  eq((await rows(page)).S, ['Alpha'], 'the first board, switched back to');
+
+  await page.waitForTimeout(800);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('section[aria-label="Pool"]');
+  await page.waitForTimeout(1200);
+  eq((await rows(page)).S, ['Alpha'], 'the board a reload comes back to');
+
+  await page.getByLabel('Switch board').selectOption({ label: 'My ranking 2' });
+  await page.waitForTimeout(500);
+  eq((await rows(page)).S, ['Bravo'], 'the other board, after a reload');
+});
+
+check('a board can be renamed, and the name reaches the exported file', async (page) => {
+  // The name is the title of the exported image and the stem of its file name,
+  // which is the whole reason it is editable at all.
+  await importLibrary(page);
+  await drag(page, poolCard(page, 'Alpha'), rowList(page, 'S'));
+
+  const name = page.getByLabel('Board name');
+  await name.fill('');
+  await name.type('Best of the 90s', { delay: 15 });
+  await page.waitForTimeout(400);
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 60_000 }),
+    page.getByRole('button', { name: /Save as PNG/ }).click(),
+  ]);
+  eq(download.suggestedFilename(), 'cinetier-best-of-the-90s.png', 'the downloaded file name');
 });
 
 let failed = 0;

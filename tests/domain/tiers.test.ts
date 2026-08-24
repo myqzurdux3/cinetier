@@ -8,6 +8,8 @@ import {
   prefill,
   clearToPool,
   type TierBoard,
+  nextBoardName,
+  duplicateBoard,
 } from '@/domain/tiers';
 import { makeFilm } from '../support/film';
 
@@ -165,5 +167,61 @@ describe('clearToPool', () => {
     // board is easy to do by accident and must not cost an undo step.
     const empty = board();
     expect(clearToPool(empty)).toBe(empty);
+  });
+});
+
+describe('nextBoardName', () => {
+  it('uses the base name when nothing has it', () => {
+    expect(nextBoardName([])).toBe('My ranking');
+    expect(nextBoardName(['Something else'])).toBe('My ranking');
+  });
+
+  it('numbers from two once the base is taken', () => {
+    expect(nextBoardName(['My ranking'])).toBe('My ranking 2');
+    expect(nextBoardName(['My ranking', 'My ranking 2'])).toBe('My ranking 3');
+  });
+
+  it('reuses the first free number rather than counting boards', () => {
+    // Deleting "My ranking 2" and adding another should give that name back,
+    // not skip to 4 and leave a gap that reads as something gone missing.
+    expect(nextBoardName(['My ranking', 'My ranking 3'])).toBe('My ranking 2');
+  });
+
+  it('takes a base name of its own', () => {
+    expect(nextBoardName(['Horror'], 'Horror')).toBe('Horror 2');
+  });
+});
+
+describe('duplicateBoard', () => {
+  it('carries the tiers and the placements under a new identity', () => {
+    const board = moveFilm(createBoard('b1', 'Mine'), 'a', { tierId: 'S', index: 0 });
+    const copy = duplicateBoard(board, 'b2', 'Mine 2');
+
+    expect(copy.id).toBe('b2');
+    expect(copy.name).toBe('Mine 2');
+    expect(copy.placements).toEqual(board.placements);
+    expect(copy.tiers).toEqual(board.tiers);
+  });
+
+  it('shares no array with the board it copied', () => {
+    // Asserted as object identity, not by editing the copy and looking at the
+    // original: every operation in this module builds new arrays, so a copy
+    // that shared them would still behave correctly today. The point is that
+    // the original is on disk and outlives the session — a future in-place
+    // edit would reach it, and this is what stops that being possible.
+    const board = moveFilm(createBoard('b1', 'Mine'), 'a', { tierId: 'S', index: 0 });
+    const copy = duplicateBoard(board, 'b2', 'Copy');
+
+    for (const tier of board.tiers) {
+      expect(copy.placements[tier.id]).not.toBe(board.placements[tier.id]);
+      expect(copy.placements[tier.id]).toEqual(board.placements[tier.id]);
+    }
+    expect(copy.placements).not.toBe(board.placements);
+  });
+
+  it('shares no tier object with the board it copied', () => {
+    const board = createBoard('b1', 'Mine');
+    const copy = duplicateBoard(board, 'b2', 'Copy');
+    expect(copy.tiers[0]).not.toBe(board.tiers[0]);
   });
 });

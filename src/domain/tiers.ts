@@ -148,3 +148,38 @@ export function clearToPool(board: TierBoard): TierBoard {
   if (samePlacements(board.placements, placements)) return board;
   return { ...board, placements };
 }
+
+/**
+ * A name for a new board that no existing board already has.
+ *
+ * "My ranking", then "My ranking 2", and so on. The number is the first one
+ * free rather than the count plus one: deleting "My ranking 2" and adding
+ * another should reuse that name, not skip to 4 and leave a gap that looks
+ * like something went missing.
+ */
+export function nextBoardName(existing: string[], base = 'My ranking'): string {
+  const taken = new Set(existing);
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n += 1) {
+    const candidate = `${base} ${String(n)}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+/**
+ * A copy of `board` under a new id and name.
+ *
+ * The placements are copied array by array. Sharing them would make an edit to
+ * the copy an edit to the original as well — and the original is on disk, so
+ * the damage would outlive the session.
+ */
+export function duplicateBoard(board: TierBoard, id: string, name: string): TierBoard {
+  return {
+    id,
+    name,
+    tiers: board.tiers.map((tier) => ({ ...tier })),
+    placements: Object.fromEntries(
+      Object.entries(board.placements).map(([tierId, ids]) => [tierId, [...ids]]),
+    ),
+  };
+}
