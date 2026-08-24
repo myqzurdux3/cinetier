@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -32,6 +32,8 @@ interface BoardScreenProps {
   search: string;
   onSearchChange: (next: string) => void;
   dispatch: (action: BoardAction) => void;
+  /** Passed straight through to the pool — see `PoolProps.notice`. */
+  poolNotice?: ReactNode;
 }
 
 export function BoardScreen({
@@ -41,6 +43,7 @@ export function BoardScreen({
   search,
   onSearchChange,
   dispatch,
+  poolNotice,
 }: BoardScreenProps) {
   const byId = useMemo(() => new Map(films.map((film) => [film.id, film])), [films]);
 
@@ -152,7 +155,12 @@ export function BoardScreen({
           through the pool while it is pinned.
         */}
         <div className="sticky bottom-0 z-10 -mx-1 bg-screen px-1 pb-2 pt-2">
-          <Pool films={poolFilms} search={search} onSearchChange={onSearchChange} />
+          <Pool
+            films={poolFilms}
+            search={search}
+            onSearchChange={onSearchChange}
+            notice={poolNotice}
+          />
         </div>
       </div>
 

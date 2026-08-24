@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import type { Film } from '@/domain/film';
 import { FilmGrid } from '@/ui/library/FilmGrid';
@@ -10,9 +10,17 @@ interface PoolProps {
   films: Film[];
   search: string;
   onSearchChange: (next: string) => void;
+  /**
+   * Shown in place of the grid when the rail admits nothing at all. It lives
+   * here because the rail narrows the pool and nothing else — the rows keep
+   * their films whatever the criteria say — so an over-tight filter should
+   * empty this one region, not take the board off the screen with it. Pool
+   * knows nothing about filters; it renders what it is handed.
+   */
+  notice?: ReactNode;
 }
 
-export function Pool({ films, search, onSearchChange }: PoolProps) {
+export function Pool({ films, search, onSearchChange, notice }: PoolProps) {
   const searchId = useId();
   const { setNodeRef, isOver } = useDroppable({ id: POOL_ID, data: { type: 'pool' } });
 
@@ -42,7 +50,9 @@ export function Pool({ films, search, onSearchChange }: PoolProps) {
         </div>
       </div>
 
-      {films.length === 0 ? (
+      {notice ?? null}
+
+      {notice ? null : films.length === 0 ? (
         // The same height as the grid it stands in for. An empty pool is
         // exactly when this text asks to be dropped into, and as a bare line
         // of prose it was a sixty-pixel strip at the bottom of the screen —

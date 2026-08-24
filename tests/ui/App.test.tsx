@@ -494,6 +494,23 @@ describe('App filter rail', () => {
     expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument();
   });
 
+  it('keeps the board on screen when the filters admit nothing', async () => {
+    // The rail narrows the pool and nothing else: a row keeps its films
+    // whatever the criteria say. Replacing the whole board with the
+    // explanation — which is what used to happen — made one criterion too many
+    // look like the ranking had been lost.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 10 })]);
+    vi.mocked(loadFilters).mockResolvedValue({ minRating: 90 });
+
+    render(<App />);
+
+    expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument();
+    // Every default row, still there, still droppable.
+    for (const label of ['S', 'A', 'B', 'C', 'D', 'F']) {
+      expect(screen.getByRole('list', { name: new RegExp(`^${label} —`) })).toBeInTheDocument();
+    }
+  });
+
   it('does not show the empty-library explainer for a genuinely empty library', async () => {
     // Distinct from the case above: no criterion is active, so `visible` is
     // empty because the library itself is, not because a filter cut it. The

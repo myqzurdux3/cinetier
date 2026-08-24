@@ -433,45 +433,53 @@ export default function App() {
                 onChange={updateCriteria}
                 showClearAll={!filtered}
               />
-              {filtered ? (
-                <NoResults films={films} criteria={criteria} onChange={updateCriteria} />
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        stepHistory(undo);
-                      }}
-                      disabled={!canUndo(history)}
-                      className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent disabled:opacity-40"
-                    >
-                      Undo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        stepHistory(redo);
-                      }}
-                      disabled={!canRedo(history)}
-                      className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent disabled:opacity-40"
-                    >
-                      Redo
-                    </button>
-                  </div>
-
-                  <PrefillPanel board={boardValue} films={films} dispatch={dispatch} />
-
-                  <BoardScreen
-                    board={boardValue}
-                    films={films}
-                    poolFilms={poolFilms}
-                    search={poolSearch}
-                    onSearchChange={setPoolSearch}
-                    dispatch={dispatch}
-                  />
+              {/* The board is rendered whatever the rail says. The rail
+                  narrows the pool and nothing else — a row keeps its films
+                  however tight the criteria get — so a combination that
+                  admits nothing empties the pool and explains itself there,
+                  rather than taking the ranking off the screen. It used to
+                  replace the whole board, which meant one criterion too many
+                  looked like the tier list had been lost. */}
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stepHistory(undo);
+                    }}
+                    disabled={!canUndo(history)}
+                    className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent disabled:opacity-40"
+                  >
+                    Undo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stepHistory(redo);
+                    }}
+                    disabled={!canRedo(history)}
+                    className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent disabled:opacity-40"
+                  >
+                    Redo
+                  </button>
                 </div>
-              )}
+
+                <PrefillPanel board={boardValue} films={films} dispatch={dispatch} />
+
+                <BoardScreen
+                  board={boardValue}
+                  films={films}
+                  poolFilms={poolFilms}
+                  search={poolSearch}
+                  onSearchChange={setPoolSearch}
+                  dispatch={dispatch}
+                  poolNotice={
+                    filtered ? (
+                      <NoResults films={films} criteria={criteria} onChange={updateCriteria} />
+                    ) : null
+                  }
+                />
+              </div>
             </div>
           </div>
         </div>
