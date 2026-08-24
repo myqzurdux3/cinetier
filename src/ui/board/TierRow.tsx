@@ -34,8 +34,29 @@ export function TierRow({ tier, films, children }: TierRowProps) {
 
   return (
     <div className="flex items-stretch gap-2">
+      {/*
+        `text-center` as well as `justify-center`: the flex rule centres this
+        block's single line box, and does nothing about the lines inside it
+        once a label wraps. A row called "Chefs-d'œuvre absolus" came out
+        ragged-left in a centred block.
+
+        `wrap-anywhere` rather than `break-words`, because a label is one field
+        a person types into and can hold anything. An unbroken twenty-letter
+        word overflowed the coloured block by sixty-one pixels, printing over
+        the row beside it; `break-words` brought that down to thirty-seven and
+        no further, since it only breaks a word once the line is already full.
+        `anywhere` also counts the break when the browser works out how narrow
+        the block may be, which is what actually contains it.
+
+        The type is sized by what it holds. This block is narrow by design —
+        the letters S through F are what it is shaped for, and they should
+        look like a tier list's letters — but a name of any length has to fit
+        the same column, and at that size it cannot.
+      */}
       <div
-        className="flex w-14 shrink-0 items-center justify-center rounded-card font-display text-lg text-on-accent"
+        className={`flex w-16 shrink-0 items-center justify-center wrap-anywhere rounded-card px-1 py-1 text-center font-display leading-tight text-on-accent ${
+          tier.label.length <= 2 ? 'text-xl' : 'text-sm'
+        }`}
         style={{ backgroundColor: tierColorVar(tier.color) }}
       >
         {tier.label}

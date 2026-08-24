@@ -129,6 +129,57 @@ export function fitText(painter: Painter, text: string, maxWidth: number): strin
   return cut === 0 ? ellipsis : text.slice(0, cut) + ellipsis;
 }
 
+/**
+ * Break `text` into lines that each fit `maxWidth`, at most `maxLines` of them.
+ *
+ * Words first, and inside a word wherever it has to break — a row's label is a
+ * field a person types into, and a single long word has to fit the same narrow
+ * block as the letter "S". The last line is cut with an ellipsis if the text
+ * runs past `maxLines`, because a row's name spilling into the row below reads
+ * as a rendering fault rather than as a long name.
+ */
+export function wrapText(
+  painter: Painter,
+  text: string,
+  maxWidth: number,
+  maxLines: number,
+): string[] {
+  const lines: string[] = [];
+  let line = '';
+
+  const push = () => {
+    if (line !== '') lines.push(line);
+    line = '';
+  };
+
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const candidate = line === '' ? word : `${line} ${word}`;
+    if (painter.measureText(candidate).width <= maxWidth) {
+      line = candidate;
+      continue;
+    }
+    push();
+    if (painter.measureText(word).width <= maxWidth) {
+      line = word;
+      continue;
+    }
+    // A word too long for a line of its own, broken a character at a time.
+    for (const character of word) {
+      if (painter.measureText(line + character).width > maxWidth && line !== '') {
+        lines.push(line);
+        line = '';
+      }
+      line += character;
+    }
+  }
+  push();
+
+  if (lines.length <= maxLines) return lines;
+  const kept = lines.slice(0, maxLines);
+  kept[maxLines - 1] = fitText(painter, `${kept[maxLines - 1] ?? ''}…`, maxWidth);
+  return kept;
+}
+
 function drawCard(
   painter: Painter,
   card: LayoutCard,
@@ -190,15 +241,24 @@ function drawRow(painter: Painter, row: LayoutRow, layout: BoardLayout, palette:
   );
   painter.fill();
 
+  // Sized by what it holds, like the block on screen: the letters S through F
+  // are what this column is shaped for and should look like a tier list's
+  // letters, and a name of any length has to fit the same width. At 26px even
+  // "Jamais" came out as "Jam…".
+  const short = row.label.length <= 2;
+  const size = short ? 28 : 15;
   painter.fillStyle = palette.onAccent;
-  painter.font = `600 26px ${palette.display}`;
+  painter.font = `600 ${String(size)}px ${palette.display}`;
   painter.textAlign = 'center';
   painter.textBaseline = 'middle';
-  painter.fillText(
-    fitText(painter, row.label, labelWidth - rowPadding * 2 - 8),
-    labelX + (labelWidth - rowPadding * 2) / 2,
-    row.y + row.height / 2,
-  );
+
+  const inner = labelWidth - rowPadding * 2 - 8;
+  const lineHeight = size * 1.15;
+  const lines = wrapText(painter, row.label, inner, Math.max(1, Math.floor(labelH / lineHeight)));
+  const top = row.y + row.height / 2 - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((line, index) => {
+    painter.fillText(line, labelX + (labelWidth - rowPadding * 2) / 2, top + index * lineHeight);
+  });
 }
 
 /** Draw a laid-out board. Everything about *where* was decided by the layout. */

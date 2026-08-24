@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   fitText,
+  wrapText,
   pngFilename,
   paint,
   posterUrl,
@@ -133,6 +134,52 @@ describe('fitText', () => {
     // Rather than overflowing the box it was told to stay inside.
     const { painter } = recorder();
     expect(fitText(painter, 'Heat', 4)).toBe('');
+  });
+});
+
+describe('wrapText', () => {
+  // The recorder measures ten pixels a character, so widths below read as
+  // character counts.
+  it('leaves text that fits on one line', () => {
+    const { painter } = recorder();
+    expect(wrapText(painter, 'Bof', 100, 3)).toEqual(['Bof']);
+  });
+
+  it('breaks between words', () => {
+    const { painter } = recorder();
+    expect(wrapText(painter, 'Vus mille fois', 60, 3)).toEqual(['Vus', 'mille', 'fois']);
+  });
+
+  it('breaks inside a word too long for a line of its own', () => {
+    // A label is a field a person types into, and a single long word has to
+    // fit the same narrow block as the letter "S".
+    const { painter } = recorder();
+    expect(wrapText(painter, 'Incontournables', 50, 4)).toEqual(['Incon', 'tourn', 'ables']);
+  });
+
+  it('never returns a line wider than it was given', () => {
+    const { painter } = recorder();
+    for (const text of ['Chefs-d’œuvre absolus', 'AAAAAAAAAAAAAAAAAAAA', 'a b c', 'S']) {
+      for (const line of wrapText(painter, text, 50, 5)) {
+        expect(painter.measureText(line).width).toBeLessThanOrEqual(50);
+      }
+    }
+  });
+
+  it('cuts at the line limit with an ellipsis', () => {
+    // A row's name spilling into the row below reads as a rendering fault
+    // rather than as a long name.
+    const { painter } = recorder();
+    const lines = wrapText(painter, 'one two three four five', 50, 2);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toMatch(/…$/);
+  });
+
+  it('gives nothing back for nothing', () => {
+    const { painter } = recorder();
+    expect(wrapText(painter, '', 50, 3)).toEqual([]);
+    expect(wrapText(painter, '   ', 50, 3)).toEqual([]);
   });
 });
 
