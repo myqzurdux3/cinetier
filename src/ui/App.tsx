@@ -19,6 +19,7 @@ import { createBoard, poolFor, type TierBoard } from '@/domain/tiers';
 import { initHistory, record, undo, redo, canUndo, canRedo, type History } from '@/domain/history';
 import { saveBoard, loadFirstBoard, clearBoards } from '@/services/boards';
 import { BoardScreen } from './board/BoardScreen';
+import { ExportButton } from './board/ExportButton';
 import { PrefillPanel } from './board/PrefillPanel';
 import { ResetConfirm } from './ResetConfirm';
 
@@ -462,6 +463,7 @@ export default function App() {
                   >
                     Redo
                   </button>
+                  <ExportButton board={boardValue} films={films} />
                 </div>
 
                 <PrefillPanel board={boardValue} films={films} dispatch={dispatch} />

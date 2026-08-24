@@ -43,3 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rows can be renamed, recoloured, added, removed and reordered. Removing a row
   returns its films to the pool rather than deleting them.
 - The board is remembered between visits, in the browser.
+- Saving the board as a PNG: rows, row colours, posters and the board's name,
+  cropped to the width its longest row actually uses, drawn in whichever theme
+  is on screen. Films whose poster never arrived keep their title, as they do
+  on the board. The cards shrink to keep the image inside what a browser will
+  allocate, so a ranking of any size produces a file.

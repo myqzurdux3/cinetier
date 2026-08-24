@@ -162,6 +162,44 @@ describe('layoutBoard', () => {
     }
   });
 
+  it('is only as wide as its longest line', () => {
+    // A ranking of four films should not export as an image three quarters
+    // empty ground. Three cards and their two gaps, plus the label column and
+    // the margins.
+    const { board, films } = boardWith('S', 3);
+    const layout = layoutBoard(board, films, OPTIONS);
+
+    expect(layout.width).toBe(
+      OPTIONS.padding * 2 + OPTIONS.labelWidth + OPTIONS.gap + 3 * 100 + 2 * OPTIONS.gap,
+    );
+    expect(layout.width).toBeLessThan(OPTIONS.width);
+  });
+
+  it('never grows past the width it was given', () => {
+    const { board, films } = boardWith('S', 40);
+    expect(layoutBoard(board, films, OPTIONS).width).toBeLessThanOrEqual(OPTIONS.width);
+  });
+
+  it('trims to the longest row, not to the last one', () => {
+    let board = createBoard('b', 'x');
+    const films = Array.from({ length: 5 }, (_, i) => film(`f${String(i)}`));
+    board = moveFilm(board, 'f0', { tierId: 'S', index: 0 });
+    board = moveFilm(board, 'f1', { tierId: 'S', index: 1 });
+    board = moveFilm(board, 'f2', { tierId: 'S', index: 2 });
+    board = moveFilm(board, 'f3', { tierId: 'F', index: 0 });
+    const wide = layoutBoard(board, films, OPTIONS);
+
+    // Row F holds one film and comes last; the width has to come from row S.
+    expect(wide.width).toBe(
+      layoutBoard(boardWith('S', 3).board, boardWith('S', 3).films, OPTIONS).width,
+    );
+  });
+
+  it('still has a label column when every row is empty', () => {
+    const layout = layoutBoard(createBoard('b', 'x'), [], OPTIONS);
+    expect(layout.width).toBe(OPTIONS.padding * 2 + OPTIONS.labelWidth);
+  });
+
   it('carries the board name, for the header to draw', () => {
     const { board, films } = boardWith('S', 1);
     expect(layoutBoard(board, films, OPTIONS).name).toBe('My ranking');

@@ -43,12 +43,14 @@ history into a tier list you can share.
 - **Start from your ratings, or from nothing.** Cinetier pre-fills the tiers
   from the scores you already gave, and you drag from there — or empty the board
   and rank entirely by hand.
+- **Save it as a picture.** One button turns the board into a PNG — posters,
+  row colours and all, cropped to what you actually ranked — in whichever
+  theme you are looking at.
 - **Two looks.** Salle obscure by default, or a neon video-shop palette —
   remembered between visits, and neither one asks the network for a font.
 
-Not yet: exporting the board as an image, and keeping more than one saved tier
-list. One board is saved and restored between visits; both of those are on the
-backlog.
+Not yet: keeping more than one saved tier list. One board is saved and restored
+between visits; named boards are on the backlog.
 
 ## Privacy
 

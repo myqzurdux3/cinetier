@@ -131,12 +131,32 @@ export function layoutBoard(
   // why it is not subtracted back off.
   return {
     name: board.name,
-    width: options.width,
+    width: usedWidth(rows, perLine, options),
     height: y + options.padding,
     headerHeight: options.headerHeight,
     rows,
     options,
   };
+}
+
+/**
+ * How wide the image actually needs to be: the label column plus the longest
+ * line any row draws, never more than `options.width`.
+ *
+ * A board is laid out against a width budget, but a ranking of ten films uses
+ * a fifth of it and the rest would be exported as empty ground — an image
+ * three times wider than its contents, which is not what anyone wants to post.
+ * Trimming cannot change the wrapping, because the count it trims to is the
+ * count that already fits on a line.
+ */
+function usedWidth(rows: LayoutRow[], perLine: number, options: LayoutOptions): number {
+  const longest = rows.reduce(
+    (most, row) => Math.max(most, Math.min(row.cards.length, perLine)),
+    0,
+  );
+  if (longest === 0) return options.padding * 2 + options.labelWidth;
+  const cards = longest * options.cardWidth + (longest - 1) * options.gap;
+  return options.padding * 2 + options.labelWidth + options.gap + cards;
 }
 
 /**
