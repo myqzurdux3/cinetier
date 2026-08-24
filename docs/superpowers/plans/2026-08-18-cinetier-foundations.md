@@ -598,7 +598,7 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 Cinetier is not affiliated with, endorsed by, or connected to IMDb or Letterboxd.
 ````
 
-Replace `myqzurdux3` with the actual GitHub account name in all four places.
+The GitHub account name has been substituted throughout this document; no placeholder remains.
 
 - [ ] **Step 5: Write the contribution and conduct documents**
 
