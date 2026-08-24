@@ -159,6 +159,27 @@ effects and their writers, not the render tree.
 
 ## Performance
 
+- **A drag costs about 75 microseconds per placed film, per pointer move.** Measured against
+  the production build on 2026-08-24, twenty pointer moves each: 400 placed films ≈ 40ms a
+  move, 1000 ≈ 75ms, 2000 ≈ 150ms. Up to a few hundred films the board is fluid; past a
+  thousand a drag visibly stutters, and `Pre-fill from my ratings` on a large library is a
+  one-click route to exactly that.
+
+  The cost is not the DOM. Every card in every row is a dnd-kit context subscriber through
+  `useSortable`, and dnd-kit updates that context several times per pointer move, so every
+  card's hook re-runs — 85,000 component renders across twenty moves on a 1000-film board.
+  Two things were tried and measured, and neither is worth its cost: memoising the card's
+  rendered subtree changes the total by about 1% (the work is in the hook, not the
+  elements), and dropping `horizontalListSortingStrategy` for a null strategy buys 11% at
+  the price of the gap-opening animation that shows where a film will land.
+
+  What would actually work is fewer mounted dnd-kit hooks: rows keeping their droppable
+  while cards inside them become plain elements, with the insertion index computed from the
+  pointer's position in the row rather than from a per-card droppable. That is a real
+  redesign of `dropTarget.ts` and it costs within-row keyboard positioning, which is why it
+  was not done on the way past. Virtualising rows is the other option and the spec rejected
+  it for interacting badly with drag and drop.
+
 - **Rows are not virtualised.** A row holding several hundred films renders every card.
   Deliberate: virtualising inside a row interacts badly with drag and drop, and no
   measurement yet says it is needed.

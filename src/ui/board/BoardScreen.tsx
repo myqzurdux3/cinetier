@@ -51,6 +51,22 @@ export function BoardScreen({
 }: BoardScreenProps) {
   const byId = useMemo(() => new Map(films.map((film) => [film.id, film])), [films]);
 
+  // Resolved once per board change rather than per render. Rebuilding these
+  // arrays inline gave every TierRow a new `films` prop on every render, and
+  // dnd-kit re-renders this tree on every pointer move of a drag.
+  const filmsByTier = useMemo(() => {
+    const resolved = new Map<string, Film[]>();
+    for (const tier of board.tiers) {
+      resolved.set(
+        tier.id,
+        (board.placements[tier.id] ?? [])
+          .map((id) => byId.get(id))
+          .filter((film): film is Film => film !== undefined),
+      );
+    }
+    return resolved;
+  }, [board, byId]);
+
   // The film currently being dragged, for the overlay below. Cleared on end
   // and on cancel so the state never claims a drag that is over — note that no
   // test can observe those two clears, because dnd-kit gates the overlay's
@@ -125,13 +141,7 @@ export function BoardScreen({
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 space-y-2">
           {board.tiers.map((tier, index) => (
-            <TierRow
-              key={tier.id}
-              tier={tier}
-              films={(board.placements[tier.id] ?? [])
-                .map((id) => byId.get(id))
-                .filter((film): film is Film => film !== undefined)}
-            >
+            <TierRow key={tier.id} tier={tier} films={filmsByTier.get(tier.id) ?? []}>
               {/*
                 Five controls on every row is a hundred and eighty pixels of
                 chrome above a board that has to share a screen with its pool,

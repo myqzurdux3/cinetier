@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import type { Film } from '@/domain/film';
@@ -28,6 +28,9 @@ export function TierRow({ tier, films, children }: TierRowProps) {
   });
 
   const label = `${tier.label} — ${films.length === 1 ? '1 film' : `${String(films.length)} films`}`;
+  // A fresh array here would make SortableContext recompute its order on every
+  // render, and during a drag there are a great many of those.
+  const ids = useMemo(() => films.map((film) => film.id), [films]);
 
   return (
     <div className="flex items-stretch gap-2">
@@ -40,10 +43,7 @@ export function TierRow({ tier, films, children }: TierRowProps) {
 
       <div className="min-w-0 flex-1">
         {children}
-        <SortableContext
-          items={films.map((film) => film.id)}
-          strategy={horizontalListSortingStrategy}
-        >
+        <SortableContext items={ids} strategy={horizontalListSortingStrategy}>
           <ul
             ref={setNodeRef}
             aria-label={label}
