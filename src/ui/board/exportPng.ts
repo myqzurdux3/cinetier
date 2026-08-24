@@ -80,15 +80,26 @@ export interface Painter {
   arcTo(x1: number, y1: number, x2: number, y2: number, radius: number): void;
   closePath(): void;
   fill(): void;
+  stroke(): void;
   clip(): void;
+  lineTo(x: number, y: number): void;
 }
 
-const RADIUS = 6;
+const CARD_RADIUS = 6;
+const PANEL_RADIUS = 12;
+const LABEL_RADIUS = 8;
 
-function roundedPath(painter: Painter, x: number, y: number, w: number, h: number): void {
+function roundedPath(
+  painter: Painter,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  radius: number,
+): void {
   // arcTo rather than roundRect: the same shape, and supported everywhere this
   // application already runs, with no feature test to get wrong.
-  const r = Math.min(RADIUS, w / 2, h / 2);
+  const r = Math.min(radius, w / 2, h / 2);
   painter.beginPath();
   painter.moveTo(x + r, y);
   painter.arcTo(x + w, y, x + w, y + h, r);
@@ -122,44 +133,66 @@ function drawCard(
 ): void {
   if (poster) {
     painter.save();
-    roundedPath(painter, card.x, card.y, card.width, card.height);
+    roundedPath(painter, card.x, card.y, card.width, card.height, CARD_RADIUS);
     painter.clip();
     painter.drawImage(poster, card.x, card.y, card.width, card.height);
     painter.restore();
-    return;
+  } else {
+    // No poster, or one that would not load: the title is the card, exactly as
+    // it is on screen. A film is never drawn as an empty rectangle.
+    painter.fillStyle = palette.screen;
+    roundedPath(painter, card.x, card.y, card.width, card.height, CARD_RADIUS);
+    painter.fill();
+
+    painter.fillStyle = palette.inkDim;
+    painter.font = `12px ${palette.text}`;
+    painter.textAlign = 'center';
+    painter.textBaseline = 'middle';
+    painter.fillText(
+      fitText(painter, card.title, card.width - 12),
+      card.x + card.width / 2,
+      card.y + card.height / 2,
+    );
   }
 
-  // No poster, or one that would not load: the title is the card, exactly as
-  // it is on screen. A film is never drawn as an empty rectangle.
-  painter.fillStyle = palette.surface;
-  roundedPath(painter, card.x, card.y, card.width, card.height);
-  painter.fill();
-
-  painter.fillStyle = palette.inkDim;
-  painter.font = `12px ${palette.text}`;
-  painter.textAlign = 'center';
-  painter.textBaseline = 'middle';
-  painter.fillText(
-    fitText(painter, card.title, card.width - 8),
-    card.x + card.width / 2,
-    card.y + card.height / 2,
-  );
+  // A hairline around every card, poster or not. Posters are dark at the edges
+  // as often as not, and without it they bleed into the panel behind them.
+  painter.strokeStyle = palette.line;
+  painter.lineWidth = 1;
+  roundedPath(painter, card.x + 0.5, card.y + 0.5, card.width - 1, card.height - 1, CARD_RADIUS);
+  painter.stroke();
 }
 
 function drawRow(painter: Painter, row: LayoutRow, layout: BoardLayout, palette: Palette): void {
-  const { padding, labelWidth } = layout.options;
+  const { padding, rowPadding, labelWidth } = layout.options;
+  const panelWidth = layout.width - padding * 2;
 
+  // The band the row sits on. Without it the rows float on the ground colour
+  // and a row holding nothing is indistinguishable from the gap above it.
+  painter.fillStyle = palette.surface;
+  roundedPath(painter, padding, row.y, panelWidth, row.height, PANEL_RADIUS);
+  painter.fill();
+
+  const labelX = padding + rowPadding;
+  const labelH = row.height - rowPadding * 2;
   painter.fillStyle = palette.tiers[row.color];
-  roundedPath(painter, padding, row.y, labelWidth, row.height);
+  roundedPath(
+    painter,
+    labelX,
+    row.y + rowPadding,
+    labelWidth - rowPadding * 2,
+    labelH,
+    LABEL_RADIUS,
+  );
   painter.fill();
 
   painter.fillStyle = palette.onAccent;
-  painter.font = `600 24px ${palette.display}`;
+  painter.font = `600 26px ${palette.display}`;
   painter.textAlign = 'center';
   painter.textBaseline = 'middle';
   painter.fillText(
-    fitText(painter, row.label, labelWidth - 12),
-    padding + labelWidth / 2,
+    fitText(painter, row.label, labelWidth - rowPadding * 2 - 8),
+    labelX + (labelWidth - rowPadding * 2) / 2,
     row.y + row.height / 2,
   );
 }
@@ -174,15 +207,34 @@ export function paint(
   painter.fillStyle = palette.screen;
   painter.fillRect(0, 0, layout.width, layout.height);
 
-  painter.fillStyle = palette.ink;
-  painter.font = `600 28px ${palette.display}`;
+  const { padding } = layout.options;
+  const inner = layout.width - padding * 2;
+
   painter.textAlign = 'left';
-  painter.textBaseline = 'middle';
-  painter.fillText(
-    fitText(painter, layout.name, layout.width - layout.options.padding * 2),
-    layout.options.padding,
-    layout.headerHeight / 2,
+  painter.textBaseline = 'alphabetic';
+
+  painter.fillStyle = palette.ink;
+  painter.font = `600 36px ${palette.display}`;
+  painter.fillText(fitText(painter, layout.name, inner), padding, padding + 34);
+
+  painter.fillStyle = palette.inkDim;
+  painter.font = `14px ${palette.text}`;
+  painter.fillText(fitText(painter, layout.subtitle, inner), padding, padding + 60);
+
+  // A hairline under the masthead, so the name reads as a heading rather than
+  // as the first row's caption.
+  painter.strokeStyle = palette.line;
+  painter.lineWidth = 1;
+  painter.beginPath();
+  painter.moveTo(padding, layout.headerHeight - 18.5);
+  painter.arcTo(
+    layout.width - padding,
+    layout.headerHeight - 18.5,
+    layout.width - padding,
+    layout.headerHeight - 18.5,
+    0,
   );
+  painter.stroke();
 
   for (const row of layout.rows) {
     drawRow(painter, row, layout, palette);
@@ -190,7 +242,22 @@ export function paint(
       drawCard(painter, card, palette, posters.get(card.filmId));
     }
   }
+
+  painter.fillStyle = palette.inkDim;
+  painter.font = `12px ${palette.text}`;
+  // Both reset explicitly: the rows above leave the alignment centred and the
+  // baseline middle, and inheriting that put half the footer off the canvas.
+  painter.textAlign = 'left';
+  painter.textBaseline = 'middle';
+  painter.fillText(FOOTER, padding, layout.height - layout.options.footerHeight / 2);
 }
+
+/**
+ * The strip along the bottom. Says where the picture came from, which is the
+ * whole point of a picture you post somewhere, and says the one thing about
+ * this application worth repeating to a stranger.
+ */
+const FOOTER = 'Made with Cinetier — your ratings never left your browser';
 
 /**
  * Load every poster the layout needs, skipping the ones that fail.
@@ -257,7 +324,18 @@ export function pngFilename(boardName: string): string {
  * null — not by throwing. `fitCardWidth` shrinks the cards until the board
  * fits inside this, so the failure never happens rather than being reported.
  */
-export const MAX_EXPORT_HEIGHT = 15000;
+export const MAX_EXPORT_HEIGHT = 7000;
+
+/**
+ * Drawn at twice the layout's size.
+ *
+ * Everything in the layout is in the same units the board uses on screen, and
+ * an image at those numbers looks soft the moment anyone opens it at full
+ * size — which is what happens to a picture posted anywhere. The canvas is
+ * twice as big and the context is scaled, so nothing in the drawing code has
+ * to know. MAX_EXPORT_HEIGHT is the layout height, before this multiplies it.
+ */
+const SCALE = 2;
 
 /** Render a board to a PNG. Null if the browser would not give up the bytes. */
 export async function renderBoardPng(
@@ -274,10 +352,14 @@ export async function renderBoardPng(
   const posters = await loadPosters(layout, loadImage);
 
   const canvas = document.createElement('canvas');
-  canvas.width = layout.width;
-  canvas.height = layout.height;
+  canvas.width = layout.width * SCALE;
+  canvas.height = layout.height * SCALE;
   const context = canvas.getContext('2d');
   if (!context) return null;
+  context.scale(SCALE, SCALE);
+  // Posters are drawn smaller than they arrive; without this they alias badly
+  // along every hard edge, which on a poster is most of it.
+  context.imageSmoothingQuality = 'high';
 
   paint(context, layout, palette, posters);
   return new Promise((resolve) => {

@@ -44,12 +44,13 @@ function film(id: string, overrides: Partial<Film> = {}): Film {
  * the calls, not the pixels.
  */
 function recorder(charWidth = 10) {
-  const calls: { text: string[]; images: number; rects: number; fills: string[] } = {
-    text: [],
-    images: 0,
-    rects: 0,
-    fills: [],
-  };
+  const calls: {
+    text: string[];
+    images: number;
+    rects: number;
+    fills: string[];
+    strokes: number;
+  } = { text: [], images: 0, rects: 0, fills: [], strokes: 0 };
   const painter: Painter = {
     fillStyle: '',
     strokeStyle: '',
@@ -73,6 +74,10 @@ function recorder(charWidth = 10) {
     moveTo: () => undefined,
     arcTo: () => undefined,
     closePath: () => undefined,
+    lineTo: () => undefined,
+    stroke: () => {
+      calls.strokes += 1;
+    },
     fill() {
       // Only ever a colour string in this module; a canvas would also accept a
       // gradient or a pattern, which is why the interface is wider.

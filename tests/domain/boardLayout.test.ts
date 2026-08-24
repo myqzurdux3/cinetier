@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  describeBoard,
   layoutBoard,
   cardsPerLine,
   rowHeight,
@@ -51,8 +52,10 @@ const OPTIONS: LayoutOptions = {
   cardWidth: 100,
   gap: 10,
   padding: 20,
+  rowPadding: 10,
   labelWidth: 100,
   headerHeight: 50,
+  footerHeight: 30,
   width: 1000,
 };
 
@@ -79,11 +82,11 @@ describe('cardsPerLine', () => {
 
 describe('rowHeight', () => {
   it('gives an empty row the height of one line', () => {
-    expect(rowHeight(0, OPTIONS)).toBe(100 * CARD_ASPECT_RATIO + OPTIONS.padding);
+    expect(rowHeight(0, OPTIONS)).toBe(100 * CARD_ASPECT_RATIO + OPTIONS.rowPadding * 2);
   });
 
   it('gives a full line and a one-card line the same height as two lines', () => {
-    const two = 2 * 100 * CARD_ASPECT_RATIO + OPTIONS.gap + OPTIONS.padding;
+    const two = 2 * 100 * CARD_ASPECT_RATIO + OPTIONS.gap + OPTIONS.rowPadding * 2;
     expect(rowHeight(8, OPTIONS)).toBe(two);
     expect(rowHeight(14, OPTIONS)).toBe(two);
   });
@@ -125,9 +128,10 @@ describe('layoutBoard', () => {
     const layout = layoutBoard(board, films, OPTIONS);
     const last = layout.rows.at(-1)!;
     expect(layout.height).toBeGreaterThanOrEqual(last.y + last.height);
-    // And no taller than one margin past it: the trailing gap between rows
-    // plus the padding, so the bottom edge matches the top and the sides.
-    expect(layout.height - (last.y + last.height)).toBe(OPTIONS.gap + OPTIONS.padding);
+    // And no taller than the footer strip past it. The trailing gap after the
+    // last row is absorbed into that strip rather than added to it, so the
+    // space below the last row matches the space above the first.
+    expect(layout.height - (last.y + last.height)).toBe(OPTIONS.footerHeight);
   });
 
   it('carries the title and poster of each placed film', () => {
@@ -152,6 +156,16 @@ describe('layoutBoard', () => {
     expect(layout.rows.find((row) => row.tierId === 'S')!.cards).toEqual([]);
   });
 
+  it('insets the last card on a line from the panel edge', () => {
+    // The row's panel runs the full width of the image. A card flush against
+    // its right edge, with every other side of it inset, reads as a mistake.
+    const { board, films } = boardWith('S', 3);
+    const layout = layoutBoard(board, films, OPTIONS);
+    const last = layout.rows.find((row) => row.tierId === 'S')!.cards.at(-1)!;
+
+    expect(layout.width - OPTIONS.padding - (last.x + last.width)).toBe(OPTIONS.rowPadding);
+  });
+
   it('keeps every card inside the image', () => {
     const { board, films } = boardWith('C', 30);
     const layout = layoutBoard(board, films, OPTIONS);
@@ -170,7 +184,12 @@ describe('layoutBoard', () => {
     const layout = layoutBoard(board, films, OPTIONS);
 
     expect(layout.width).toBe(
-      OPTIONS.padding * 2 + OPTIONS.labelWidth + OPTIONS.gap + 3 * 100 + 2 * OPTIONS.gap,
+      OPTIONS.padding * 2 +
+        OPTIONS.labelWidth +
+        OPTIONS.gap +
+        3 * 100 +
+        2 * OPTIONS.gap +
+        OPTIONS.rowPadding,
     );
     expect(layout.width).toBeLessThan(OPTIONS.width);
   });
@@ -200,6 +219,17 @@ describe('layoutBoard', () => {
     expect(layout.width).toBe(OPTIONS.padding * 2 + OPTIONS.labelWidth);
   });
 
+  it('carries a subtitle counting what is ranked and where', () => {
+    let board = createBoard('b', 'x');
+    const films = [film('a'), film('b'), film('c')];
+    board = moveFilm(board, 'a', { tierId: 'S', index: 0 });
+    board = moveFilm(board, 'b', { tierId: 'S', index: 1 });
+    board = moveFilm(board, 'c', { tierId: 'D', index: 0 });
+
+    // Rows nothing was placed in do not count towards it.
+    expect(layoutBoard(board, films, OPTIONS).subtitle).toBe('3 films across 2 rows');
+  });
+
   it('carries the board name, for the header to draw', () => {
     const { board, films } = boardWith('S', 1);
     expect(layoutBoard(board, films, OPTIONS).name).toBe('My ranking');
@@ -227,5 +257,14 @@ describe('fitCardWidth', () => {
     // Far too small for that many films at any legible size; the answer is the
     // floor, not a one-pixel poster and not an endless loop.
     expect(fitCardWidth(board, films, 500)).toBe(24);
+  });
+});
+
+describe('describeBoard', () => {
+  it('reads as a sentence at every count', () => {
+    expect(describeBoard(0, 0)).toBe('0 films across 0 rows');
+    expect(describeBoard(1, 1)).toBe('1 film across 1 row');
+    expect(describeBoard(2, 1)).toBe('2 films across 1 row');
+    expect(describeBoard(1, 2)).toBe('1 film across 2 rows');
   });
 });

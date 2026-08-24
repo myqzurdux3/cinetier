@@ -17,21 +17,27 @@ export interface LayoutOptions {
   cardWidth: number;
   gap: number;
   padding: number;
+  /** The inset between a row's panel and the cards inside it. */
+  rowPadding: number;
   /** The coloured block carrying the row's letter. */
   labelWidth: number;
-  /** The strip at the top carrying the board's name. */
+  /** The band at the top carrying the board's name and its count. */
   headerHeight: number;
+  /** The strip at the bottom carrying the attribution. */
+  footerHeight: number;
   /** The image's total width. Rows wrap inside whatever is left of it. */
   width: number;
 }
 
 export const DEFAULT_LAYOUT: LayoutOptions = {
-  cardWidth: 100,
-  gap: 8,
-  padding: 16,
-  labelWidth: 96,
-  headerHeight: 72,
-  width: 1400,
+  cardWidth: 104,
+  gap: 10,
+  padding: 24,
+  rowPadding: 10,
+  labelWidth: 88,
+  headerHeight: 112,
+  footerHeight: 44,
+  width: 1440,
 };
 
 /** A poster's height is 1.5x its width, matching the cards on screen. */
@@ -58,6 +64,8 @@ export interface LayoutRow {
 
 export interface BoardLayout {
   name: string;
+  /** The line under the name: how much was ranked, and across how many rows. */
+  subtitle: string;
   width: number;
   height: number;
   headerHeight: number;
@@ -77,11 +85,18 @@ export function cardsPerLine(options: LayoutOptions): number {
   return Math.max(1, Math.floor((available + options.gap) / perCard));
 }
 
-/** The height of a row holding `count` cards, empty rows included. */
+/** The height of a row's panel holding `count` cards, empty rows included. */
 export function rowHeight(count: number, options: LayoutOptions): number {
   const cardHeight = options.cardWidth * CARD_ASPECT_RATIO;
   const lines = Math.max(1, Math.ceil(count / cardsPerLine(options)));
-  return lines * cardHeight + (lines - 1) * options.gap + options.padding;
+  return lines * cardHeight + (lines - 1) * options.gap + options.rowPadding * 2;
+}
+
+/** "24 films across 4 rows", or the singular of each where it applies. */
+export function describeBoard(cardCount: number, filledRows: number): string {
+  const films = cardCount === 1 ? '1 film' : `${String(cardCount)} films`;
+  const rows = filledRows === 1 ? '1 row' : `${String(filledRows)} rows`;
+  return `${films} across ${rows}`;
 }
 
 /**
@@ -118,7 +133,7 @@ export function layoutBoard(
         options.labelWidth +
         options.gap +
         (index % perLine) * (options.cardWidth + options.gap),
-      y: y + Math.floor(index / perLine) * (cardHeight + options.gap) + options.padding / 2,
+      y: y + options.rowPadding + Math.floor(index / perLine) * (cardHeight + options.gap),
       width: options.cardWidth,
       height: cardHeight,
     }));
@@ -127,12 +142,15 @@ export function layoutBoard(
     y += height + options.gap;
   }
 
-  // The trailing gap after the last row becomes the bottom margin, which is
-  // why it is not subtracted back off.
+  const cardCount = rows.reduce((total, row) => total + row.cards.length, 0);
   return {
     name: board.name,
+    subtitle: describeBoard(cardCount, rows.filter((row) => row.cards.length > 0).length),
     width: usedWidth(rows, perLine, options),
-    height: y + options.padding,
+    // The trailing gap after the last row is absorbed into the footer strip
+    // rather than added to it, so the space below the last row matches the
+    // space above the first.
+    height: y - options.gap + options.footerHeight,
     headerHeight: options.headerHeight,
     rows,
     options,
@@ -156,7 +174,10 @@ function usedWidth(rows: LayoutRow[], perLine: number, options: LayoutOptions): 
   );
   if (longest === 0) return options.padding * 2 + options.labelWidth;
   const cards = longest * options.cardWidth + (longest - 1) * options.gap;
-  return options.padding * 2 + options.labelWidth + options.gap + cards;
+  // `rowPadding` again on the right: the row's panel runs the full width, and
+  // without it the last card on a full line ends flush against the panel's
+  // edge while every other side of it is inset.
+  return options.padding * 2 + options.labelWidth + options.gap + cards + options.rowPadding;
 }
 
 /**
