@@ -1,7 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { openDB } from 'idb';
-import { saveBoard, loadBoard, loadFirstBoard, clearBoards } from '@/services/boards';
+import {
+  saveBoard,
+  loadBoard,
+  loadCurrentBoard,
+  listBoards,
+  deleteBoard,
+  saveCurrentBoardId,
+  newBoardId,
+  clearBoards,
+} from '@/services/boards';
 import { db, resetDatabase } from '@/services/db';
 import { createBoard, moveFilm } from '@/domain/tiers';
 
@@ -27,20 +36,20 @@ describe('board persistence', () => {
     expect(await (await db()).count('boards')).toBe(1);
   });
 
-  it('loadFirstBoard returns null when there are none', async () => {
-    expect(await loadFirstBoard()).toBeNull();
+  it('loadCurrentBoard returns null when there are none', async () => {
+    expect(await loadCurrentBoard()).toBeNull();
   });
 
-  it('loadFirstBoard returns the only board there is', async () => {
+  it('loadCurrentBoard returns the only board there is', async () => {
     await saveBoard(createBoard('b1', 'Mine'));
-    expect((await loadFirstBoard())?.id).toBe('b1');
+    expect((await loadCurrentBoard())?.id).toBe('b1');
   });
 
   it('clearBoards removes every board', async () => {
     await saveBoard(createBoard('b1', 'One'));
     await saveBoard(createBoard('b2', 'Two'));
     await clearBoards();
-    expect(await loadFirstBoard()).toBeNull();
+    expect(await loadCurrentBoard()).toBeNull();
   });
 });
 
@@ -68,15 +77,115 @@ describe('the v2 to v3 schema upgrade', () => {
 
     const upgraded = await db();
 
-    expect(upgraded.version).toBe(3);
+    expect(upgraded.version).toBe(4);
     expect(Array.from(upgraded.objectStoreNames).sort()).toEqual([
       'boards',
       'filters',
       'library',
+      'settings',
       'tmdb',
       'tmdbDetails',
     ]);
     expect(await upgraded.get('library', 'current')).toEqual(saved);
     expect((await upgraded.get('filters', 'current'))?.criteria).toEqual({ minRating: 80 });
+  });
+});
+
+describe('the v3 to v4 schema upgrade', () => {
+  it('keeps a saved board when the settings store is added', async () => {
+    // The third bump. Named boards needed somewhere to remember which board
+    // the user was last looking at, and a board is not the place to keep an
+    // answer about the collection it belongs to.
+    const v3 = await openDB('cinetier', 3, {
+      upgrade(database) {
+        for (const store of ['tmdb', 'tmdbDetails', 'library', 'filters', 'boards']) {
+          if (!database.objectStoreNames.contains(store)) database.createObjectStore(store);
+        }
+      },
+    });
+    const board = moveFilm(createBoard('b1', 'Mine'), 'film-1', { tierId: 'S', index: 0 });
+    try {
+      await v3.put('boards', board, board.id);
+    } finally {
+      v3.close();
+    }
+
+    const upgraded = await db();
+
+    expect(upgraded.version).toBe(4);
+    expect(Array.from(upgraded.objectStoreNames)).toContain('settings');
+    expect(await upgraded.get('boards', 'b1')).toEqual(board);
+    // Nothing was current before there was anywhere to say so, and the
+    // fallback is what puts the one saved board in front of the user anyway.
+    expect(await upgraded.get('settings', 'currentBoardId')).toBeUndefined();
+    expect((await loadCurrentBoard())?.id).toBe('b1');
+  });
+});
+
+describe('the board collection', () => {
+  it('lists nothing when nothing was saved', async () => {
+    expect(await listBoards()).toEqual([]);
+  });
+
+  it('lists every saved board', async () => {
+    await saveBoard(createBoard('b1', 'One'));
+    await saveBoard(createBoard('b2', 'Two'));
+    expect((await listBoards()).map((board) => board.id).sort()).toEqual(['b1', 'b2']);
+  });
+
+  it('deletes one board and leaves the rest', async () => {
+    await saveBoard(createBoard('b1', 'One'));
+    await saveBoard(createBoard('b2', 'Two'));
+    await deleteBoard('b1');
+    expect((await listBoards()).map((board) => board.id)).toEqual(['b2']);
+  });
+
+  it('deleting a board that is not there is not an error', async () => {
+    await saveBoard(createBoard('b1', 'One'));
+    await deleteBoard('nope');
+    expect((await listBoards()).map((board) => board.id)).toEqual(['b1']);
+  });
+
+  it('remembers which board was current', async () => {
+    await saveBoard(createBoard('b1', 'One'));
+    await saveBoard(createBoard('b2', 'Two'));
+    await saveCurrentBoardId('b2');
+    expect((await loadCurrentBoard())?.id).toBe('b2');
+  });
+
+  it('falls back to the oldest board when the remembered one is gone', async () => {
+    // Deleted in another tab, or lost to a failed write. Returning nothing
+    // would put an empty default board in front of someone who has one saved.
+    await saveBoard(createBoard('b1', 'One'));
+    await saveCurrentBoardId('b-deleted');
+    expect((await loadCurrentBoard())?.id).toBe('b1');
+  });
+
+  it('remembers nothing across a reset', async () => {
+    await saveBoard(createBoard('b1', 'One'));
+    await saveCurrentBoardId('b1');
+    await clearBoards();
+    expect(await loadCurrentBoard()).toBeNull();
+  });
+});
+
+describe('newBoardId', () => {
+  it('gives a different id every time', () => {
+    const ids = new Set(Array.from({ length: 200 }, () => newBoardId()));
+    expect(ids.size).toBe(200);
+  });
+
+  it('sorts after an id made earlier', async () => {
+    // `getAll` returns records in key order, so the ids decide the order the
+    // picker lists boards in, and that order should be the order they were
+    // made in.
+    const first = newBoardId();
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    expect(newBoardId() > first).toBe(true);
+  });
+
+  it('sorts after the id the very first saved board was given', () => {
+    // That board is called `board-1`, from before there was more than one.
+    expect(newBoardId() > 'board-1').toBe(true);
   });
 });

@@ -15,11 +15,28 @@ import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
 import type { ImportOutcome } from './import/importFiles';
 import type { Film } from '@/domain/film';
 import { boardReducer, type BoardAction } from '@/domain/board';
-import { createBoard, poolFor, type TierBoard } from '@/domain/tiers';
+import {
+  createBoard,
+  duplicateBoard,
+  nextBoardName,
+  poolFor,
+  type TierBoard,
+} from '@/domain/tiers';
 import { initHistory, record, undo, redo, canUndo, canRedo, type History } from '@/domain/history';
-import { saveBoard, loadFirstBoard, clearBoards } from '@/services/boards';
+import {
+  saveBoard,
+  loadBoard,
+  loadCurrentBoard,
+  listBoards,
+  deleteBoard,
+  saveCurrentBoardId,
+  newBoardId,
+  clearBoards,
+} from '@/services/boards';
 import { BoardScreen } from './board/BoardScreen';
 import { ExportButton } from './board/ExportButton';
+import { download } from './board/download';
+import { BoardBar } from './board/BoardBar';
 import { PrefillPanel } from './board/PrefillPanel';
 import { ResetConfirm } from './ResetConfirm';
 
@@ -61,6 +78,12 @@ export default function App() {
     initHistory(createBoard('board-1', 'My ranking')),
   );
   const [poolSearch, setPoolSearch] = useState('');
+  /**
+   * The other saved boards, for the picker. The board on screen is not read
+   * from here — `history.present` is — because it changes on every edit and
+   * this list would be a stale copy of it a keystroke later.
+   */
+  const [otherBoards, setOtherBoards] = useState<TierBoard[]>([]);
   const [confirmingReset, setConfirmingReset] = useState(false);
   // Off by default: five controls on every row is a hundred and eighty pixels
   // of chrome above a board, and renaming a row is not what anyone came for.
@@ -162,7 +185,7 @@ export default function App() {
   const runId = useRef(0);
 
   // Guards the debounced board save further down. Without it, the very
-  // first save (400ms after mount) can fire before `loadFirstBoard()` below
+  // first save (400ms after mount) can fire before `loadCurrentBoard()` below
   // has had a chance to resolve, writing the fresh, empty default board over
   // whatever was actually saved last time — the read simply hasn't caught up
   // yet. Settled by the board restore, whichever way it goes (found a board
@@ -187,11 +210,22 @@ export default function App() {
       });
   }, []);
 
+  const refreshBoards = useCallback((currentId: string) => {
+    listBoards()
+      .then((all) => {
+        setOtherBoards(all.filter((board) => board.id !== currentId));
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to list the saved boards', error);
+      });
+  }, []);
+
   useEffect(() => {
-    loadFirstBoard()
+    loadCurrentBoard()
       .then((restored) => {
         if (restored && !restoreCancelled.current && !boardEdited.current) {
           setHistory(initHistory(restored));
+          refreshBoards(restored.id);
         }
       })
       .catch((error: unknown) => {
@@ -202,7 +236,7 @@ export default function App() {
         // there is nothing left for the debounced save to race against.
         boardReady.current = true;
       });
-  }, []);
+  }, [refreshBoards]);
 
   useEffect(() => {
     // Dragging produces a burst of moves; one transaction per frame of that
@@ -303,6 +337,20 @@ export default function App() {
       setWarnings(outcome.warnings);
       setSkipped(outcome.skipped);
       setEnriching({ done: 0, total: outcome.films.length });
+      // A Cinetier `.json` carries a ranking as well as a library. It replaces
+      // whatever is on screen, and becomes the board the debounced save writes
+      // — under the id the file gave it, so re-importing the same file twice
+      // updates one board rather than accumulating copies of it.
+      if (outcome.board) {
+        lastEdit.current = null;
+        boardEdited.current = true;
+        boardReady.current = true;
+        setHistory(initHistory(outcome.board));
+        saveCurrentBoardId(outcome.board.id).catch((error: unknown) => {
+          console.error('Failed to remember which board is current', error);
+        });
+        refreshBoards(outcome.board.id);
+      }
       // A prior run's details pass (the restore's, or an earlier import's) may
       // still be abandoned mid-flight when this one starts: runId has just
       // moved on, so its own progress callback and finishing block are about
@@ -335,7 +383,7 @@ export default function App() {
       await saveLibrary(enriched);
       await fillInDetails(enriched, id);
     },
-    [fillInDetails],
+    [fillInDetails, refreshBoards],
   );
 
   // Before the early return, so the hook order never depends on whether a
@@ -349,6 +397,109 @@ export default function App() {
       ? pooled
       : pooled.filter((film) => film.title.toLowerCase().includes(needle));
   }, [boardValue, visible, poolSearch]);
+
+  /**
+   * The picker's list: every saved board, with the one on screen standing in
+   * for its own saved copy so a rename shows up in the picker as it is typed.
+   */
+  const allBoards = useMemo(
+    () => [...otherBoards, boardValue].sort((a, b) => a.id.localeCompare(b.id)),
+    [otherBoards, boardValue],
+  );
+
+  /**
+   * Put `next` on screen, after writing the board leaving it to disk.
+   *
+   * That write is not optional. The debounced save is keyed on `boardValue`,
+   * so changing it here cancels a save that was still pending — an edit made
+   * within the last four hundred milliseconds would leave with the board and
+   * never arrive anywhere.
+   */
+  const openBoard = useCallback((next: TierBoard, leaving: TierBoard) => {
+    saveBoard(leaving).catch((error: unknown) => {
+      console.error('Failed to save the board being left', error);
+    });
+    saveCurrentBoardId(next.id).catch((error: unknown) => {
+      console.error('Failed to remember which board is current', error);
+    });
+    // A fresh history: undo does not reach across boards, and an entry from
+    // the board being left would restore it *into* the one arriving.
+    lastEdit.current = null;
+    boardReady.current = true;
+    boardEdited.current = true;
+    setHistory(initHistory(next));
+    setOtherBoards((current) =>
+      [...current.filter((board) => board.id !== next.id && board.id !== leaving.id), leaving].sort(
+        (a, b) => a.id.localeCompare(b.id),
+      ),
+    );
+  }, []);
+
+  function switchBoard(id: string) {
+    if (id === boardValue.id) return;
+    const target = otherBoards.find((board) => board.id === id);
+    if (target) {
+      openBoard(target, boardValue);
+      return;
+    }
+    // Not in the list this session — another tab made it, or the list is
+    // stale. Read it rather than refuse.
+    loadBoard(id)
+      .then((loaded) => {
+        if (loaded) openBoard(loaded, boardValue);
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to open that board', error);
+      });
+  }
+
+  function createNewBoard() {
+    const names = allBoards.map((board) => board.name);
+    openBoard(createBoard(newBoardId(), nextBoardName(names)), boardValue);
+  }
+
+  function duplicateCurrentBoard() {
+    const names = allBoards.map((board) => board.name);
+    openBoard(
+      duplicateBoard(boardValue, newBoardId(), nextBoardName(names, boardValue.name)),
+      boardValue,
+    );
+  }
+
+  function deleteCurrentBoard() {
+    const [replacement] = otherBoards;
+    // The bar disables this at one board, so there is always somewhere to go.
+    if (!replacement) return;
+    const removed = boardValue.id;
+    deleteBoard(removed).catch((error: unknown) => {
+      console.error('Failed to delete the board', error);
+    });
+    saveCurrentBoardId(replacement.id).catch((error: unknown) => {
+      console.error('Failed to remember which board is current', error);
+    });
+    lastEdit.current = null;
+    boardEdited.current = true;
+    setHistory(initHistory(replacement));
+    setOtherBoards((current) => current.filter((board) => board.id !== replacement.id));
+  }
+
+  /**
+   * The library and the board on screen, as a file to carry elsewhere.
+   *
+   * The whole library, not only the films the board places: a ranking arriving
+   * somewhere with an empty pool beside it is half of what was saved, and the
+   * poster paths it carries mean the other browser draws it without asking
+   * TMDB again.
+   */
+  async function saveBoardFile() {
+    // Loaded on demand, like the other parsers: writing the file and reading
+    // it back live in the same module, and neither is needed to draw a board.
+    const { buildEnvelope, envelopeFilename } = await import('@/parsers/envelope');
+    const blob = new Blob([buildEnvelope(films ?? [], boardValue, new Date())], {
+      type: 'application/json',
+    });
+    download(blob, envelopeFilename(boardValue.name));
+  }
 
   function performReset() {
     restoreCancelled.current = true;
@@ -373,6 +524,7 @@ export default function App() {
     // leaving a stale key here would swallow the first rename after a reset.
     lastEdit.current = null;
     setHistory(initHistory(createBoard('board-1', 'My ranking')));
+    setOtherBoards([]);
     setPoolSearch('');
     setSource(null);
   }
@@ -461,6 +613,21 @@ export default function App() {
                   replace the whole board, which meant one criterion too many
                   looked like the tier list had been lost. */}
               <div className="space-y-4">
+                <BoardBar
+                  boards={allBoards}
+                  current={boardValue}
+                  onSwitch={switchBoard}
+                  onRename={(name) => {
+                    dispatch({ type: 'renameBoard', name });
+                  }}
+                  onCreate={createNewBoard}
+                  onDuplicate={duplicateCurrentBoard}
+                  onDelete={deleteCurrentBoard}
+                  onSaveFile={() => {
+                    void saveBoardFile();
+                  }}
+                />
+
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"

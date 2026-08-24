@@ -345,7 +345,7 @@ check('the board exports a PNG', async (page) => {
   if (width < 200 || height < 200) throw new Error(`the image is ${width}x${height}`);
 });
 
-check('the v2 database is upgraded without losing anything', async (page) => {
+check('a v2 database is upgraded to the current one without losing anything', async (page) => {
   // Version-independent upgrade: create what is missing, never branch on the
   // version that arrived.
   await page.route('**/blank-for-seeding', (route) =>
@@ -450,13 +450,135 @@ check('the v2 database is upgraded without losing anything', async (page) => {
 
   eq(
     state.stores,
-    ['boards', 'filters', 'library', 'tmdb', 'tmdbDetails'],
+    ['boards', 'filters', 'library', 'settings', 'tmdb', 'tmdbDetails'],
     'the stores after upgrading',
   );
   eq(state.titles, ['Old Alpha'], 'the library after upgrading');
   eq(state.criteria, { minRating: 20 }, 'the criteria after upgrading');
-  if (state.version < 3) throw new Error(`still at version ${String(state.version)}`);
+  if (state.version < 4) throw new Error(`still at version ${String(state.version)}`);
   if (!state.watchedAtIsDate) throw new Error('watchedAt came back as something other than a Date');
+});
+
+check('a second board keeps its own ranking, and survives a reload', async (page) => {
+  // Two boards, each with a different film in row S, switched between and then
+  // reloaded. What this is really guarding is the write on the way out: the
+  // debounced save is keyed on the board, so switching cancels one that was
+  // still pending, and an edit made in the last four hundred milliseconds
+  // would leave with the board and never arrive anywhere.
+  await importLibrary(page);
+  await drag(page, poolCard(page, 'Alpha'), rowList(page, 'S'));
+  eq((await rows(page)).S, ['Alpha'], 'the first board');
+
+  await page.getByRole('button', { name: 'New board' }).click();
+  await page.waitForTimeout(400);
+  const name = page.getByLabel('Board name');
+  if ((await name.inputValue()) !== 'My ranking 2') {
+    throw new Error(`the new board is called "${await name.inputValue()}"`);
+  }
+  eq((await rows(page)).S, [], 'the second board starts empty');
+
+  await drag(page, poolCard(page, 'Bravo'), rowList(page, 'S'));
+  eq((await rows(page)).S, ['Bravo'], 'the second board');
+
+  await page.getByLabel('Switch board').selectOption({ label: 'My ranking' });
+  await page.waitForTimeout(500);
+  eq((await rows(page)).S, ['Alpha'], 'the first board, switched back to');
+
+  await page.waitForTimeout(800);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('section[aria-label="Pool"]');
+  await page.waitForTimeout(1200);
+  eq((await rows(page)).S, ['Alpha'], 'the board a reload comes back to');
+
+  await page.getByLabel('Switch board').selectOption({ label: 'My ranking 2' });
+  await page.waitForTimeout(500);
+  eq((await rows(page)).S, ['Bravo'], 'the other board, after a reload');
+});
+
+check('a board can be renamed, and the name reaches the exported file', async (page) => {
+  // The name is the title of the exported image and the stem of its file name,
+  // which is the whole reason it is editable at all.
+  await importLibrary(page);
+  await drag(page, poolCard(page, 'Alpha'), rowList(page, 'S'));
+
+  const name = page.getByLabel('Board name');
+  await name.fill('');
+  await name.type('Best of the 90s', { delay: 15 });
+  await page.waitForTimeout(400);
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 60_000 }),
+    page.getByRole('button', { name: /Save as PNG/ }).click(),
+  ]);
+  eq(download.suggestedFilename(), 'cinetier-best-of-the-90s.png', 'the downloaded file name');
+});
+
+check('a board saved to a file comes back after everything is deleted', async (page) => {
+  // The point of the file: carry a ranking to another browser, or back to this
+  // one after starting over. Nothing short of actually deleting everything and
+  // reading the file back proves it.
+  await importLibrary(page);
+  await drag(page, poolCard(page, 'Alpha'), rowList(page, 'S'));
+  await drag(page, poolCard(page, 'Bravo'), rowList(page, 'A'));
+  const name = page.getByLabel('Board name');
+  await name.fill('');
+  await name.type('Carried over', { delay: 15 });
+  await page.waitForTimeout(400);
+  const before = await rows(page);
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 60_000 }),
+    page.getByRole('button', { name: 'Save as a file' }).click(),
+  ]);
+  eq(download.suggestedFilename(), 'cinetier-carried-over.json', 'the downloaded file name');
+  const stream = await download.createReadStream();
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  const saved = Buffer.concat(chunks);
+
+  // Everything, deliberately: library, filters and every board.
+  await page.getByRole('button', { name: /import a different export/i }).click();
+  await page.getByRole('button', { name: /delete everything/i }).click();
+  await page.waitForTimeout(800);
+  await page.getByRole('button', { name: /IMDb/ }).click();
+  await page.waitForSelector('input[type=file]');
+  await page.setInputFiles('input[type=file]', {
+    name: 'cinetier-carried-over.json',
+    mimeType: 'application/json',
+    buffer: saved,
+  });
+  await page.waitForSelector('section[aria-label="Pool"]');
+  await page.waitForTimeout(1200);
+
+  eq(await rows(page), before, 'the ranking read back from the file');
+  eq(await page.getByLabel('Board name').inputValue(), 'Carried over', 'the board name');
+
+  // And it is the board the next save writes, not a copy beside it.
+  await page.waitForTimeout(800);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('section[aria-label="Pool"]');
+  await page.waitForTimeout(1200);
+  eq(await rows(page), before, 'the ranking after a reload');
+  if (await page.getByLabel('Switch board').count()) {
+    throw new Error('importing the file left more than one board behind');
+  }
+});
+
+check('a damaged file is refused with something to do about it', async (page) => {
+  await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: /IMDb/ }).click();
+  await page.waitForSelector('input[type=file]');
+  await page.setInputFiles('input[type=file]', {
+    name: 'broken.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{"cinetier": 1, "films": "not a list"}'),
+  });
+  await page.waitForTimeout(900);
+
+  const text = await page.locator('main').innerText();
+  if (!/not a Cinetier export/i.test(text))
+    throw new Error(`no explanation: ${text.slice(0, 160)}`);
+  if (!/Save as a file/i.test(text)) throw new Error('no hint about where such a file comes from');
 });
 
 let failed = 0;

@@ -6,8 +6,21 @@
  * string can never be compared against a fixed value. Everything downstream
  * uses this normalized type instead.
  */
-export type TitleType =
-  'movie' | 'tvMovie' | 'series' | 'miniSeries' | 'episode' | 'short' | 'other';
+/**
+ * A tuple, not a bare union, so the members can be enumerated at runtime —
+ * validating a file this application wrote needs to ask "is this one of them?".
+ */
+export const TITLE_TYPES = [
+  'movie',
+  'tvMovie',
+  'series',
+  'miniSeries',
+  'episode',
+  'short',
+  'other',
+] as const;
+
+export type TitleType = (typeof TITLE_TYPES)[number];
 
 /** Lowercase, strip accents, and reduce punctuation to spaces, so "Mini-série" meets "miniserie". */
 function normalize(label: string): string {

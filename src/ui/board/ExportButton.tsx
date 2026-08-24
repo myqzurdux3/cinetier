@@ -3,6 +3,7 @@ import type { Film } from '@/domain/film';
 import type { TierBoard } from '@/domain/tiers';
 import { placedIds } from '@/domain/tiers';
 import { pngFilename, readPalette, renderBoardPng } from './exportPng';
+import { download } from './download';
 
 interface ExportButtonProps {
   board: TierBoard;
@@ -32,22 +33,7 @@ export function ExportButton({ board, films }: ExportButtonProps) {
         setState('failed');
         return;
       }
-      // Revoked on the next task rather than immediately: a browser that has
-      // not started reading the object URL yet would be handed a dead one.
-      const url = globalThis.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = pngFilename(board.name);
-      // In the document while it is clicked: a detached anchor works in
-      // Chrome and has not always worked elsewhere, and the cost of being
-      // sure is two lines.
-      link.style.display = 'none';
-      document.body.append(link);
-      link.click();
-      link.remove();
-      setTimeout(() => {
-        globalThis.URL.revokeObjectURL(url);
-      }, 0);
+      download(blob, pngFilename(board.name));
       setState('idle');
     } catch {
       // Every step that can fail — a poster, the canvas, the encode — fails

@@ -1,6 +1,7 @@
 import type { Film } from '@/domain/film';
 import { mergeLibraries } from '@/domain/dedupe';
 import type { LetterboxdFiles } from '@/parsers/letterboxd';
+import type { TierBoard } from '@/domain/tiers';
 import { ParseError } from '@/parsers/types';
 
 /*
@@ -15,13 +16,25 @@ import { ParseError } from '@/parsers/types';
 const imdbParser = () => import('@/parsers/imdb');
 const letterboxdParser = () => import('@/parsers/letterboxd');
 const archiveReader = () => import('@/parsers/archive');
+const envelopeParser = () => import('@/parsers/envelope');
 
 export type ImportOutcome =
-  | { status: 'ok'; films: Film[]; warnings: string[]; skipped: number }
+  | {
+      status: 'ok';
+      films: Film[];
+      warnings: string[];
+      skipped: number;
+      /**
+       * Present only when the file was one this application wrote: a Cinetier
+       * `.json` carries a ranking as well as a library, and losing it would
+       * make the file half a backup.
+       */
+      board?: TierBoard;
+    }
   | { status: 'error'; message: string; hint: string };
 
 const GENERIC_HINT =
-  'Drop an IMDb ratings.csv, or a Letterboxd export .zip — or the diary.csv and ratings.csv from inside it.';
+  'Drop an IMDb ratings.csv, a Letterboxd export .zip — or the diary.csv and ratings.csv from inside it — or a .json Cinetier saved.';
 
 /**
  * An IMDb export is identified by its columns, since its name varies — recent
@@ -54,6 +67,7 @@ export async function importFiles(files: File[]): Promise<ImportOutcome> {
   const warnings: string[] = [];
   let skipped = 0;
   const letterboxd: LetterboxdFiles = {};
+  let board: TierBoard | undefined;
 
   try {
     for (const file of files) {
@@ -64,6 +78,19 @@ export async function importFiles(files: File[]): Promise<ImportOutcome> {
       }
 
       const text = await file.text();
+
+      if (file.name.toLowerCase().endsWith('.json')) {
+        // A file this application wrote. It carries a ranking as well as a
+        // library, and it is the only input here whose shape is entirely our
+        // own doing — which is exactly why the parser checks every field of it.
+        const { parseEnvelope } = await envelopeParser();
+        const result = parseEnvelope(text);
+        libraries.push(result.films);
+        warnings.push(...result.warnings);
+        board = result.board;
+        continue;
+      }
+
       const newline = text.indexOf('\n');
       const header = newline === -1 ? text : text.slice(0, newline);
 
@@ -113,7 +140,7 @@ export async function importFiles(files: File[]): Promise<ImportOutcome> {
       };
     }
 
-    return { status: 'ok', films, warnings, skipped };
+    return { status: 'ok', films, warnings, skipped, ...(board ? { board } : {}) };
   } catch (error) {
     if (error instanceof ParseError) {
       return { status: 'error', message: error.message, hint: error.hint };

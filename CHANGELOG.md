@@ -47,6 +47,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rows can be renamed, recoloured, added, removed and reordered. Removing a row
   returns its films to the pool rather than deleting them.
 - The board is remembered between visits, in the browser.
+- As many tier lists as you like: name a board, duplicate it, start another,
+  switch between them. Each keeps its own ranking, and the one you were last
+  looking at is the one that comes back.
+- Saving a library and a board to a `.json` file, and reading one back — here
+  or in another browser. Dropping that file in goes through the same import
+  screen as an IMDb or Letterboxd export. A file written by a newer version is
+  refused rather than guessed at; a placement naming a film the file does not
+  carry is dropped with a warning rather than taking the ranking with it.
 - Saving the board as a PNG: a masthead carrying the board's name and what it
   holds, each row on a panel of its own, posters at twice the layout's
   resolution, and a footer saying where the picture came from. Drawn in
