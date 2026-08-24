@@ -27,6 +27,18 @@ npm run dev
 npm run typecheck && npm run lint && npm run test:run && npm run build
 ```
 
+CI runs those, and a second job that drives the board in a real browser. Drag
+and drop is pointer events and layout, and jsdom has neither — it reports every
+element as 0x0 — so nothing above tests a drag. To run those yourself before
+opening a pull request:
+
+```bash
+npm install --no-save playwright
+npx playwright install chromium
+npm run dev            # in another terminal
+npm run e2e
+```
+
 ## Adding a new import source
 
 Add a parser under `src/parsers/` that returns `ParseResult`, with a fixture

@@ -10,6 +10,7 @@ import {
   type TierBoard,
   nextBoardName,
   duplicateBoard,
+  type Tier,
 } from '@/domain/tiers';
 import { makeFilm } from '../support/film';
 
@@ -167,6 +168,54 @@ describe('clearToPool', () => {
     // board is easy to do by accident and must not cost an undo step.
     const empty = board();
     expect(clearToPool(empty)).toBe(empty);
+  });
+});
+
+describe('a board whose rows are not the default six', () => {
+  // `createBoard` has taken a custom `tiers` array since the board's first
+  // commit, and every other test in this file omits it. Everything below
+  // operates on `board.tiers` generically; nothing had ever proved it.
+  const CUSTOM: Tier[] = [
+    { id: 'love', label: 'Loved', color: 'c', minRating: 80 },
+    { id: 'rest', label: 'The rest', color: 'f', minRating: null },
+  ];
+  const films = [
+    makeFilm({ id: 'high', rating: 95 }),
+    makeFilm({ id: 'low', rating: 10 }),
+    makeFilm({ id: 'unrated', rating: null }),
+  ];
+
+  it('starts with a slot for each of its own rows and no others', () => {
+    const board = createBoard('b1', 'Mine', CUSTOM);
+    expect(Object.keys(board.placements).sort()).toEqual(['love', 'rest']);
+  });
+
+  it('pre-fills into its own rows, by its own thresholds', () => {
+    const filled = prefill(createBoard('b1', 'Mine', CUSTOM), films);
+
+    expect(filled.placements['love']).toEqual(['high']);
+    expect(filled.placements['rest']).toEqual(['low']);
+    // Unrated films stay in the pool whatever the rows are called: a rating is
+    // what pre-fill sorts by.
+    expect(Object.values(filled.placements).flat()).not.toContain('unrated');
+  });
+
+  it('moves a film between rows it has never heard of before', () => {
+    let board = createBoard('b1', 'Mine', CUSTOM);
+    board = moveFilm(board, 'high', { tierId: 'rest', index: 0 });
+    expect(board.placements['rest']).toEqual(['high']);
+
+    board = moveFilm(board, 'high', { tierId: 'love', index: 0 });
+    expect(board.placements['love']).toEqual(['high']);
+    expect(board.placements['rest']).toEqual([]);
+  });
+
+  it('pools everything its rows do not hold', () => {
+    const board = moveFilm(createBoard('b1', 'Mine', CUSTOM), 'high', {
+      tierId: 'love',
+      index: 0,
+    });
+    expect(poolFor(board, films).map((f) => f.id)).toEqual(['low', 'unrated']);
   });
 });
 

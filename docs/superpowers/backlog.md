@@ -316,18 +316,20 @@ effects and their writers, not the render tree.
   Still not done by a person: listening to an actual screen reader. What was checked is the
   text of the live region at each step, which is what a screen reader would read, not the
   reading itself.
-- **The board's save guard has an untested release path.** The debounced save is suppressed
-  (`boardReady`) until the board restore settles, and released in a `.finally()` so it fires
-  even when `loadFirstBoard()` resolves to `null` — no saved board found. That branch is
-  verified by reading the code, not by a test.
-- **No domain test covers a non-default tier list.** `tierForRating`, `prefill` and
-  `moveFilm` all operate generically on `board.tiers`, but every call to `createBoard` in the
-  test suite omits the third argument and gets `DEFAULT_TIERS`. `createBoard` has accepted a
-  custom `tiers` array since this plan's first task, so covering it would have been a few
-  lines at any point; deferred twice, and recorded here rather than promised to a task that
-  does not exist.
-- **No test pins "the grid renders before enrichment resolves"** — the property the whole
-  enrichment architecture exists to provide. It rests on manual browser checks.
+- ~~**The board's save guard has an untested release path.**~~ Half closed on 2026-08-24,
+  and the other half deliberately left open. Restoring a board is the one path that changes
+  the board without going through `dispatch`, so it is the only thing that can show the
+  release happening — and it now does: a restored board is written back, and removing the
+  `.finally()` fails that test. Releasing when there was *no* board to restore still has no
+  test, and one written for it was deleted rather than shipped: every other path that
+  changes the board sets the guard itself, so nothing can distinguish the release firing
+  from the release being unnecessary.
+- ~~**No domain test covers a non-default tier list.**~~ Closed on 2026-08-24: two rows of
+  someone's own, through `createBoard`, `prefill`, `moveFilm` and `poolFor`.
+- ~~**No test pins "the grid renders before enrichment resolves"**~~ — the property the
+  whole enrichment architecture exists to provide. Closed on 2026-08-24 with an enrichment
+  that never resolves: the board, the pool and the library header are all on screen anyway,
+  and the un-enriched library is not saved.
   `tests/ui/App.test.tsx` already has the deferred-promise machinery to do it properly.
 - **Every test file redefines the same `Film` factory** — six near-identical copies. A shared
   `tests/support/film.ts` would delete about a hundred lines.
