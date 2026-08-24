@@ -114,6 +114,7 @@ npm run test:run    # single run
 npm run lint
 npm run typecheck
 npm run build
+npm run e2e         # drag and drop, in a real browser — see e2e/README.md
 ```
 
 The layering is enforced by ESLint, not by convention:

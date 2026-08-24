@@ -14,6 +14,28 @@ export default tseslint.config(
     },
   },
   {
+    // The end-to-end checks are two environments in one file: Node around the
+    // outside, and the page's own globals inside every `page.evaluate`
+    // callback, which is serialised and run in the browser. Nothing here
+    // distinguishes the two, so both sets are declared.
+    files: ['e2e/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        Buffer: 'readonly',
+        console: 'readonly',
+        document: 'readonly',
+        getComputedStyle: 'readonly',
+        indexedDB: 'readonly',
+        innerHeight: 'readonly',
+        process: 'readonly',
+        scrollBy: 'readonly',
+        scrollTo: 'readonly',
+        scrollY: 'readonly',
+        setTimeout: 'readonly',
+      },
+    },
+  },
+  {
     // The architectural rule from the spec, enforced rather than documented.
     // .tsx as well as .ts: neither layer has a component in it today, and the
     // rule is what keeps it that way rather than the current file listing.
@@ -85,10 +107,8 @@ export default tseslint.config(
           // Every colour belongs to a theme, and a literal belongs to neither.
           // logoMark.ts is exempt: a favicon data URI cannot read a CSS variable,
           // so the mark's literal values live there and nowhere else.
-          selector:
-            "Literal[value=/#[0-9a-fA-F]{3,8}\\b|\\brgba?\\(|\\bhsla?\\(/]",
-          message:
-            'Colours come from theme tokens, never literals — add a token in src/index.css.',
+          selector: 'Literal[value=/#[0-9a-fA-F]{3,8}\\b|\\brgba?\\(|\\bhsla?\\(/]',
+          message: 'Colours come from theme tokens, never literals — add a token in src/index.css.',
         },
         {
           // The Literal selector above only matches string/number literals —
@@ -97,10 +117,8 @@ export default tseslint.config(
           // selector a colour hidden in an interpolated string, like
           // Landing.tsx's own `var(--color-${tier.token})` pattern but with a
           // hex value spliced in instead of a token, sails straight through.
-          selector:
-            "TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b|\\brgba?\\(|\\bhsla?\\(/]",
-          message:
-            'Colours come from theme tokens, never literals — add a token in src/index.css.',
+          selector: 'TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b|\\brgba?\\(|\\bhsla?\\(/]',
+          message: 'Colours come from theme tokens, never literals — add a token in src/index.css.',
         },
       ],
     },

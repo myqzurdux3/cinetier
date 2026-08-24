@@ -270,14 +270,13 @@ effects and their writers, not the render tree.
 
 ## Testing and tooling
 
-- **Nothing in the checked-in suite drives a real browser.** Every defect the manual passes
-  found is now covered by a unit test of the rule it broke, and an axe run over four screens
-  at two widths in both themes reports no violations — but all of that was driven from
-  throwaway scripts in a session scratchpad. An end-to-end suite that a `npm run` command
-  could execute, using Playwright's own Chromium (already cached on this machine), is the
-  obvious next investment: real pointer events are the only way most of these defects were
-  ever reachable.
-
+- ~~**Nothing in the checked-in suite drives a real browser.**~~ Closed on 2026-08-24:
+  `e2e/board.mjs`, thirteen checks driven through a real Chromium, one per defect that a
+  unit test could not have reached. Not in CI and not a dependency — Playwright downloads a
+  browser, which is a large cost to put on every `npm install` for a suite that is not part
+  of the gate; `e2e/README.md` says how to run it. Two of the thirteen say plainly that they
+  can no longer reproduce the defect they were written for, because it depended on the
+  layout where the pool was pinned over the rows.
 - ~~**The tier board's manual verification gate is entirely outstanding.**~~ Closed on
   2026-08-24. The Chrome extension was still not connected, so the pass ran through a real
   Chromium driven by Playwright from the scratchpad instead — a genuine browser with real
