@@ -637,7 +637,23 @@ check(
     if (!target) throw new Error('no tier row is reachable above the pool at this size');
 
     await drag(page, poolCard(page, last), rowList(page, target));
-    eq((await rows(page))[target], [last], `after dragging ${last} into row ${target}`);
+
+    // That it reached *a* row, not that it reached this one. The defect this
+    // guards is a drag that dies: the pool's grid re-virtualises mid-drag, the
+    // dragged card is unmounted, the pointer capture goes with it and nothing
+    // is dropped anywhere. Which row catches it is dnd-kit's business, and it
+    // legitimately differs — the page auto-scrolls while a card is held near
+    // the top of the window, and how far depends on how quickly the machine
+    // gets through the frames. Pinning the row made this pass here and fail on
+    // a runner twice.
+    const after = await rows(page);
+    const landed = Object.entries(after).find(([, films]) => films.includes(last))?.[0];
+    if (!landed) {
+      throw new Error(
+        `${last} was dragged out of a narrow pool towards row ${target} and reached no row at all; ` +
+          `the board last said: "${await announcement(page)}"`,
+      );
+    }
   },
   { width: 900, height: 800 },
 );
