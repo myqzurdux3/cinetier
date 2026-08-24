@@ -18,20 +18,16 @@ interface PoolProps {
    * knows nothing about filters; it renders what it is handed.
    */
   notice?: ReactNode;
-  /**
-   * True where the pool has a column of its own and can use the height of the
-   * screen; false where it sits under the board and has to leave room for it.
-   */
-  tall?: boolean;
 }
 
-export function Pool({ films, search, onSearchChange, notice, tall = false }: PoolProps) {
+export function Pool({ films, search, onSearchChange, notice }: PoolProps) {
   const searchId = useId();
   const { setNodeRef, isOver } = useDroppable({ id: POOL_ID, data: { type: 'pool' } });
   // One height, used by the grid and by the message that stands in for it —
   // an empty pool is exactly when something is dropped into it, and as a bare
-  // line of prose it was a strip too thin to aim at.
-  const gridHeight = tall ? 'xl:h-[calc(100dvh-11rem)] h-[26dvh] min-h-40' : 'h-[26dvh] min-h-40';
+  // line of prose it was a strip too thin to aim at. A quarter of the screen
+  // under the board; nearly all of it in the column the pool gets at `xl`.
+  const gridHeight = 'h-[26dvh] min-h-40 xl:h-[calc(100dvh-11rem)]';
 
   return (
     <section

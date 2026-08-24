@@ -50,9 +50,12 @@ export function readPalette(element: Element): Palette {
 /**
  * Where a poster of this size lives on TMDB's image host.
  *
- * w185 rather than the w154 the cards use: an export is looked at closely and
- * often at more than one-to-one, and the next size up costs one request per
- * ranked film either way.
+ * w185 rather than the w154 the cards use. It costs a fresh request per ranked
+ * film — a different URL is a different cache entry, so nothing already on
+ * screen is reused — and it is worth it: the image is drawn at twice the
+ * layout's size, which puts a card at 208 device pixels, and a 154-wide source
+ * upscaled that far is visibly soft in the one artefact of this application
+ * anyone else ever sees.
  */
 export function posterUrl(path: string): string {
   return `https://image.tmdb.org/t/p/w185${path}`;

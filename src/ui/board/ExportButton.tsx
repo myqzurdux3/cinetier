@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Film } from '@/domain/film';
 import type { TierBoard } from '@/domain/tiers';
 import { placedIds } from '@/domain/tiers';
@@ -20,7 +20,9 @@ type State = 'idle' | 'rendering' | 'failed';
  */
 export function ExportButton({ board, films }: ExportButtonProps) {
   const [state, setState] = useState<State>('idle');
-  const count = placedIds(board).size;
+  // Recomputed only when the board changes: `placedIds` walks every placement
+  // and builds a set, and this runs on every render of the toolbar otherwise.
+  const count = useMemo(() => placedIds(board).size, [board]);
 
   async function save() {
     setState('rendering');
@@ -36,7 +38,13 @@ export function ExportButton({ board, films }: ExportButtonProps) {
       const link = document.createElement('a');
       link.href = url;
       link.download = pngFilename(board.name);
+      // In the document while it is clicked: a detached anchor works in
+      // Chrome and has not always worked elsewhere, and the cost of being
+      // sure is two lines.
+      link.style.display = 'none';
+      document.body.append(link);
       link.click();
+      link.remove();
       setTimeout(() => {
         globalThis.URL.revokeObjectURL(url);
       }, 0);

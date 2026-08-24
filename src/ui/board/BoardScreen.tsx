@@ -20,7 +20,7 @@ import { TierRow } from './TierRow';
 import { TierRowControls } from './TierRowControls';
 import { Pool } from './Pool';
 import { destinationFor, type DropTarget } from './dropTarget';
-import { preferPointer } from './collision';
+import { preferPointer, POOL_ID } from './collision';
 import { mayAutoScroll } from './autoScroll';
 import { boardAnnouncements, type ItemDescription } from './announcements';
 
@@ -69,11 +69,12 @@ export function BoardScreen({
 
   // See collision.ts: closestCenter alone drops a film into whichever row's
   // centre happens to be nearest, which is not the row under the cursor as
-  // soon as two rows differ in height.
-  const collisionDetection = preferPointer(pointerWithin, closestCenter);
+  // soon as two rows differ in height. Held stable across renders because
+  // dnd-kit re-runs it on every pointer move.
+  const collisionDetection = useMemo(() => preferPointer(pointerWithin, closestCenter), []);
 
   const describe = (id: string): ItemDescription | null => {
-    if (id === 'pool') return { title: 'Pool', where: 'the pool' };
+    if (id === POOL_ID) return { title: 'Pool', where: 'the pool' };
 
     const tierId = id.startsWith('tier:') ? id.slice('tier:'.length) : null;
     if (tierId !== null) {
@@ -174,18 +175,18 @@ export function BoardScreen({
             search={search}
             onSearchChange={onSearchChange}
             notice={poolNotice}
-            tall
           />
         </div>
       </div>
 
-      {/* The pool is virtualised: a card dragged out of it can be unmounted
-          mid-drag, either by the auto-scroll dnd-kit runs on the pool's own
-          scroll container or by the row it is travelling towards changing the
-          pool's contents. Without an overlay the dragged element *is* that
-          virtualised node, so the drag would lose the thing it is dragging.
-          The overlay is a copy dnd-kit owns and positions itself, which
-          outlives the source element by construction. */}
+      {/* The pool is virtualised, so a card dragged out of it can be
+          unmounted mid-drag — the row it is travelling towards changes the
+          pool's contents, and the grid re-renders without it. Without an
+          overlay the dragged element *is* that virtualised node, and the drag
+          would lose the thing it is dragging. The overlay is a copy dnd-kit
+          owns and positions itself, which outlives the source element by
+          construction. (The pool's own auto-scroll used to unmount it too;
+          see autoScroll.ts for why that no longer happens.) */}
       <DragOverlay>
         {activeFilm && (
           <div className="w-full">
