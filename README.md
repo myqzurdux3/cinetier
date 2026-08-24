@@ -53,10 +53,20 @@ from the scores you already gave — the thresholds are yours to change, and it
 tells you how many films each one would place before it places them — or you
 can leave the board empty and rank entirely by hand.
 
+**Keep as many lists as you like.** Name a board, duplicate it, start another.
+Rank the same library three different ways and switch between them; each one
+remembers its own ranking.
+
 **Save it as a picture.** One button, one PNG: your rows, your colours, your
 posters, in whichever theme you are looking at.
 
 ![An exported tier list: six coloured rows of film posters under the board's name](docs/media/export.jpg)
+
+**Or as a file you can carry.** "Save as a file" writes a `.json` holding your
+library and the board on screen. Drop it back in here, or into another browser,
+and both come back — posters and all, without asking TMDB again. It is also
+the only backup this application can give you, since nothing of yours is stored
+anywhere but your own browser.
 
 **Two looks.** Salle obscure by default, or a neon video-shop palette. Both are
 remembered between visits, and neither one asks the network for a font.
@@ -84,12 +94,6 @@ on any account, free or paid.
 Because IMDb does not export watch dates, Cinetier uses your rating date
 instead for IMDb imports, and labels it as such. Letterboxd diary entries carry
 real watch dates.
-
-## Not yet
-
-Keeping more than one saved tier list. One board is saved and restored between
-visits; named boards, and carrying a board to another browser as a file, are on
-the [backlog](docs/superpowers/backlog.md).
 
 ## Running it locally
 

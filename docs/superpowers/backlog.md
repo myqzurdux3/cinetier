@@ -59,28 +59,36 @@ title plus year, and this is the stated cost of that rule.
 `FilterCriteria` has no `minYear`/`maxYear`, and translating a range into decades answers a
 different question. A later plan can add the axis.
 
-### Named boards are the next plan, not this one
+### ~~Named boards are the next plan, not this one~~ — built
 
-Create, rename, delete and switch between several boards is Plan B of the same spec
-(`docs/superpowers/specs/2026-08-23-cinetier-tier-board-design.md`), whose data model this
-plan already built: every board carries an `id` and a `name` (`createBoard(id, name,
-tiers)`), and `services/boards.ts` keys the `boards` object store by `id`. Plan B adds a
-screen, not a migration.
+Shipped on 2026-08-24. A board bar above the toolbar carries the name, a picker once there
+is more than one to pick, and New, Duplicate and Delete. Schema v4 added a `settings` store
+to remember which board was last open. Board ids sort by the moment they were made, since
+`getAll` returns records in key order and that order is what the picker shows.
 
-### ~~PNG export~~, and the JSON envelope, are the plan after that
+What it is not: a board that can be shared by link, or two boards open at once. Neither has
+been asked for.
+
+### ~~PNG export, and the JSON envelope~~ — the plan after that, now built
 
 Both were the spec's third plan, named explicitly in its own "what stays for later" line.
+Both shipped on 2026-08-24, along with named boards, which was the plan before it.
 
-PNG export shipped on 2026-08-24. The geometry is `src/domain/boardLayout.ts`, arithmetic
-over numbers with no DOM in it; the drawing is `src/ui/board/exportPng.ts`, which paints
-through an interface narrow enough for a test to hand it a recorder instead of a canvas —
-jsdom has no 2D context, so the split is what makes either half testable. Colours come from
-the document's custom properties, so both themes export correctly and a third would too.
-Verified in a browser in both themes, with and without real posters from TMDB.
+PNG export: geometry in `src/domain/boardLayout.ts`, arithmetic over numbers with no DOM in
+it; drawing in `src/ui/board/exportPng.ts`, through an interface narrow enough for a test to
+hand it a recorder — jsdom has no 2D context, so the split is what makes either half
+testable. Colours come from the document's custom properties, so both themes export
+correctly and a third would too.
 
-The JSON envelope — a saved board as a file you can carry to another browser — is still
-unbuilt, and is now the more useful of the two, since a PNG is a picture of a ranking and
-not the ranking itself.
+The JSON envelope: `src/parsers/envelope.ts`, a parser beside the IMDb and Letterboxd ones
+and lazy-loaded like them. It is the only file this application reads that it also wrote,
+and the only one where trusting it anyway would be a mistake, so every field is validated —
+a newer format version is refused rather than guessed at, and a placement naming a film the
+file does not carry is dropped with a warning rather than taking the ranking with it.
+
+What the envelope still is not: a merge. Importing one replaces the library rather than
+adding to it, which is right for "carry this elsewhere" and wrong for "combine two
+accounts". Nothing asks for the second yet.
 
 ### The undo history does not survive a reload
 
