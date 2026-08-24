@@ -19,3 +19,39 @@ jobs:
       - run: npm run lint
       - run: npm run test:coverage
       - run: npm run build
+
+  # A second job rather than more steps on the first: these are slower and
+  # differently fragile, and a red one should say "the browser checks failed",
+  # not "verify failed" for the twentieth line of a log.
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Playwright is deliberately not a dependency of this project: the
+      # package downloads a browser on install, which every contributor's
+      # `npm install` would pay for to run a suite most of them never run.
+      # It is installed here, where it is actually used, and the browser is
+      # cached between runs.
+      - name: Cache the browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
+      - run: npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+
+      # Against the production build, not the dev server. The dev server runs
+      # React in development mode with StrictMode double-rendering, and is what
+      # ships nowhere.
+      - run: npm run build
+      - name: Drag and drop, in a real browser
+        run: |
+          npx vite preview --port 4173 &
+          until curl -sf http://localhost:4173/ >/dev/null; do sleep 1; done
+          CINETIER_URL=http://localhost:4173/ npm run e2e

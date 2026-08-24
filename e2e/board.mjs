@@ -21,7 +21,13 @@ import {
 } from './harness.mjs';
 
 const checks = [];
-const check = (name, run) => checks.push({ name, run });
+/**
+ * `viewport` is not decoration. The board is a different arrangement above and
+ * below the three-column breakpoint — beside the rows on a wide screen, under
+ * them on a narrow one — and a suite that only ever runs wide tests one of
+ * them.
+ */
+const check = (name, run, viewport) => checks.push({ name, run, viewport });
 
 const eq = (actual, expected, what) => {
   const [a, b] = [JSON.stringify(actual), JSON.stringify(expected)];
@@ -581,9 +587,80 @@ check('a damaged file is refused with something to do about it', async (page) =>
   if (!/Save as a file/i.test(text)) throw new Error('no hint about where such a file comes from');
 });
 
+check(
+  'a card from the far end of the pool reaches a row on a narrow screen',
+  async (page) => {
+    // Below the three-column breakpoint the pool goes back under the board, and
+    // a drag out of it travels up through the pool's own scroll container.
+    // dnd-kit auto-scrolls the scroll ancestors of the dragged card, and that
+    // container is one of them: scrolling it re-virtualises the grid, unmounts
+    // the card being dragged, and the drag dies with no highlight and no drop.
+    // This is the only check that reaches the arrangement where that matters.
+    await importLibrary(page, ratingsCsv(manyFilms(120)));
+    const scroller = page.locator('section[aria-label="Pool"] .overflow-y-auto');
+    await scroller.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await page.waitForTimeout(500);
+
+    const last = await page.evaluate(() =>
+      [...document.querySelectorAll('section[aria-label="Pool"] [aria-roledescription]')]
+        .at(-1)
+        ?.textContent.trim(),
+    );
+    await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(300);
+
+    // Whichever row is on screen above the pool and clear of the band at the
+    // top of the window where dnd-kit auto-scrolls the page, rather than a row
+    // named here.
+    //
+    // Both halves are load-bearing. Which rows are in view on a narrow screen
+    // depends on font metrics and scrollbar widths, which differ between a
+    // laptop and a runner, so naming one passes in one place and fails in the
+    // other for reasons that have nothing to do with the defect. And aiming
+    // into the auto-scroll band moves the page under the aim: a row picked
+    // there was measured landing its film in the row above, which is dnd-kit
+    // doing exactly what it should and this check reading it as a failure.
+    const target = await page.evaluate(() => {
+      const pool = document.querySelector('section[aria-label="Pool"]').getBoundingClientRect();
+      for (const list of document.querySelectorAll('ul[aria-label]')) {
+        const label = list.getAttribute('aria-label');
+        if (!label || !/\d+ films?$/.test(label)) continue;
+        const box = list.getBoundingClientRect();
+        if (box.top > innerHeight * 0.3 && box.bottom < pool.top - 10) {
+          return label.split(' — ')[0];
+        }
+      }
+      return null;
+    });
+    if (!target) throw new Error('no tier row is reachable above the pool at this size');
+
+    await drag(page, poolCard(page, last), rowList(page, target));
+
+    // That it reached *a* row, not that it reached this one. The defect this
+    // guards is a drag that dies: the pool's grid re-virtualises mid-drag, the
+    // dragged card is unmounted, the pointer capture goes with it and nothing
+    // is dropped anywhere. Which row catches it is dnd-kit's business, and it
+    // legitimately differs — the page auto-scrolls while a card is held near
+    // the top of the window, and how far depends on how quickly the machine
+    // gets through the frames. Pinning the row made this pass here and fail on
+    // a runner twice.
+    const after = await rows(page);
+    const landed = Object.entries(after).find(([, films]) => films.includes(last))?.[0];
+    if (!landed) {
+      throw new Error(
+        `${last} was dragged out of a narrow pool towards row ${target} and reached no row at all; ` +
+          `the board last said: "${await announcement(page)}"`,
+      );
+    }
+  },
+  { width: 900, height: 800 },
+);
+
 let failed = 0;
-for (const { name, run } of checks) {
-  const { browser, page, errors } = await open();
+for (const { name, run, viewport } of checks) {
+  const { browser, page, errors } = await open(viewport);
   try {
     await run(page);
     if (errors.length > 0) throw new Error(`console errors: ${errors.slice(0, 3).join(' | ')}`);
