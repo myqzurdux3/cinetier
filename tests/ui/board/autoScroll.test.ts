@@ -6,7 +6,9 @@ describe('mayAutoScroll', () => {
     // dnd-kit auto-scrolls the scroll ancestors of the dragged card, and for a
     // card picked up in the pool that includes the pool's virtualised grid.
     // Scrolling it unmounts the card being dragged, which loses the pointer
-    // capture and kills the drag with no highlight and no drop.
+    // capture and kills the drag with no highlight and no drop. See
+    // autoScroll.ts on why this is kept despite no browser check failing
+    // without it.
     document.body.innerHTML = `
       <section data-pool="true"><div id="grid"><div id="card"></div></div></section>
       <div id="page"></div>`;

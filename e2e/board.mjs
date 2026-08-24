@@ -21,7 +21,13 @@ import {
 } from './harness.mjs';
 
 const checks = [];
-const check = (name, run) => checks.push({ name, run });
+/**
+ * `viewport` is not decoration. The board is a different arrangement above and
+ * below the three-column breakpoint — beside the rows on a wide screen, under
+ * them on a narrow one — and a suite that only ever runs wide tests one of
+ * them.
+ */
+const check = (name, run, viewport) => checks.push({ name, run, viewport });
 
 const eq = (actual, expected, what) => {
   const [a, b] = [JSON.stringify(actual), JSON.stringify(expected)];
@@ -581,9 +587,42 @@ check('a damaged file is refused with something to do about it', async (page) =>
   if (!/Save as a file/i.test(text)) throw new Error('no hint about where such a file comes from');
 });
 
+check(
+  'a card from the far end of the pool reaches a row on a narrow screen',
+  async (page) => {
+    // Below the three-column breakpoint the pool goes back under the board, and
+    // a drag out of it travels up through the pool's own scroll container.
+    // dnd-kit auto-scrolls the scroll ancestors of the dragged card, and that
+    // container is one of them: scrolling it re-virtualises the grid, unmounts
+    // the card being dragged, and the drag dies with no highlight and no drop.
+    // `mayAutoScroll` refuses that container for exactly this reason, and this
+    // is the only check that reaches the arrangement where it matters.
+    await importLibrary(page, ratingsCsv(manyFilms(120)));
+    const scroller = page.locator('section[aria-label="Pool"] .overflow-y-auto');
+    await scroller.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await page.waitForTimeout(500);
+
+    const last = await page.evaluate(() =>
+      [...document.querySelectorAll('section[aria-label="Pool"] [aria-roledescription]')]
+        .at(-1)
+        ?.textContent.trim(),
+    );
+    // The pool is below the rows here, so a row has to be brought into view
+    // with it; F is the one directly above.
+    await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(300);
+
+    await drag(page, poolCard(page, last), rowList(page, 'F'));
+    eq((await rows(page)).F, [last], `after dragging ${last} out of a narrow pool`);
+  },
+  { width: 900, height: 800 },
+);
+
 let failed = 0;
-for (const { name, run } of checks) {
-  const { browser, page, errors } = await open();
+for (const { name, run, viewport } of checks) {
+  const { browser, page, errors } = await open(viewport);
   try {
     await run(page);
     if (errors.length > 0) throw new Error(`console errors: ${errors.slice(0, 3).join(' | ')}`);
