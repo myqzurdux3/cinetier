@@ -1,0 +1,37 @@
+/*
+  Self-hosted, latin subset only. `@fontsource-variable/*`'s own index.css
+  pulls in every subset the upstream font ships (cyrillic, cyrillic-ext,
+  greek, greek-ext, vietnamese, latin-ext, latin — 12 woff2 files across the
+  two faces), even though this interface's copy is entirely Latin-1 (the
+  only accented letters are "é", U+00E9, already inside the latin range
+  below). Declaring just the two latin faces here, referencing the same
+  package's files, cuts that to 2.
+
+  Not a CDN, not a runtime fetch: these `url()`s resolve to the npm packages
+  already in node_modules, and Vite copies + hashes them into the build like
+  any other asset, so the privacy claim in README.md still holds.
+*/
+
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Oswald Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 700;
+  src: url('@fontsource-variable/oswald/files/oswald-latin-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
