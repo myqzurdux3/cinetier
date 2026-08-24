@@ -4,75 +4,92 @@
 
 **Turn your film history into a tier list.**
 
-Import your IMDb or Letterboxd data, filter it however you like, and rank it.
+Import your IMDb or Letterboxd export, filter it however you like, rank it by
+dragging, and save the result as a picture.
 Everything runs in your browser — no account, no upload, no server.
 
-[Open Cinetier](https://myqzurdux3.github.io/cinetier/)
+**[Open Cinetier →](https://myqzurdux3.github.io/cinetier/)**
 
-> **Status:** in development — importing, browsing, filtering and ranking your library work today.
+[![CI](https://github.com/myqzurdux3/cinetier/actions/workflows/ci.yml/badge.svg)](https://github.com/myqzurdux3/cinetier/actions/workflows/ci.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-e8b44a)](LICENSE)
+![No backend](https://img.shields.io/badge/backend-none-4fa3d1)
 
 </div>
 
+![The board: a filter rail on the left, tier rows in the middle, the pool of unranked films on the right](docs/media/board.jpg)
+
 ---
+
+## Why
+
+You have rated hundreds of films on IMDb or Letterboxd, and that history is a
+list you scroll, not a picture you can look at. Cinetier turns the export those
+services already give you into a tier list — and it does it without asking you
+to hand your taste to anyone.
 
 ## What it does
 
-You have rated hundreds of films on IMDb or Letterboxd. Cinetier turns that
-history into a tier list you can share.
+**Import your own data.** Drop in an IMDb export or a Letterboxd export `.zip`,
+exactly as those services hand it to you — ratings, watchlists and lists alike,
+films and series alike, in whatever language your account uses. Films you
+imported from both services are matched and merged, so nothing appears twice.
 
-- **Import your own data.** Drop in an IMDb export or a Letterboxd export
-  `.zip`, exactly as those services give it to you — ratings, watchlists and
-  lists alike, films and series alike, in whatever language your account uses.
-- **Filter before you rank.** A rail beside your library — rating, era, type,
-  genre, director, runtime, watch dates, rewatches and a top-N limit, each
-  section showing how many titles it admits on its own. Only films you watched this
-  year. Only those you rated above four stars. Only 1980s horror under 100
-  minutes. Only the ones you liked far more than everyone else did. Active
-  filters show as removable chips, and if a combination leaves nothing, the
-  screen names which one to drop. Your criteria are remembered between visits,
-  same as your library.
-- **Rank on a board.** Default S/A/B/C/D/F rows, or your own — rename,
-  recolour, add, remove and reorder them, and removing a row returns its
-  films to the pool. Drag a film into a row, between rows, or back to the
-  pool. Every move can be undone and redone. The board is remembered between
-  visits, same as your library and your filters. The pool stays pinned to the
-  bottom of the screen while the rows scroll past it, so a row and the pool
-  are always in view together. Keyboard operation works the same way — space
-  to lift, arrows to move, space to drop — and has been driven end to end in
-  a browser, not only in tests.
-- **Start from your ratings, or from nothing.** Cinetier pre-fills the tiers
-  from the scores you already gave, and you drag from there — or empty the board
-  and rank entirely by hand.
-- **Save it as a picture.** One button turns the board into a PNG — posters,
-  row colours and all, cropped to what you actually ranked — in whichever
-  theme you are looking at.
-- **Two looks.** Salle obscure by default, or a neon video-shop palette —
-  remembered between visits, and neither one asks the network for a font.
+**Filter before you rank.** A rail beside your library: rating, era, type,
+genre, director, runtime, watch dates, rewatches and a top-N limit, each
+section showing how many titles it admits on its own. Only films you watched
+this year. Only those you rated above four stars. Only 1980s horror under 100
+minutes. Only the ones you liked far more than everyone else did. Active
+filters show as removable chips, and if a combination leaves nothing, the
+screen names which one to drop.
 
-Not yet: keeping more than one saved tier list. One board is saved and restored
-between visits; named boards are on the backlog.
+**Rank on a board.** Default S/A/B/C/D/F rows, or your own — rename, recolour,
+add, remove and reorder them, and removing a row returns its films to the pool
+rather than deleting them. Drag a film into a row, between rows, or back to the
+pool. Every move can be undone and redone. Keyboard works the same way: space
+to lift, arrows to move, space to drop, with each step announced.
+
+**Start from your ratings, or from nothing.** Cinetier can pre-fill the tiers
+from the scores you already gave — the thresholds are yours to change, and it
+tells you how many films each one would place before it places them — or you
+can leave the board empty and rank entirely by hand.
+
+**Save it as a picture.** One button, one PNG: your rows, your colours, your
+posters, in whichever theme you are looking at.
+
+![An exported tier list: six coloured rows of film posters under the board's name](docs/media/export.jpg)
+
+**Two looks.** Salle obscure by default, or a neon video-shop palette. Both are
+remembered between visits, and neither one asks the network for a font.
 
 ## Privacy
 
 Your ratings never leave your browser. There is no server and no account.
-Films are stored locally, and the only outbound requests are to TMDB, which
-receive a title, year, or IMDb identifier in order to fetch a poster and,
-afterwards, its genres, director and runtime — never your ratings and never
-your history.
+
+Your library, your filters and your board are stored locally, in the browser's
+own database. The only outbound requests go to TMDB, which receive a title, a
+year, or an IMDb identifier in order to fetch a poster and, afterwards, that
+film's genres, director and runtime. They never receive your ratings and never
+receive your history.
 
 ## Getting your data
 
-**IMDb** — Your Ratings page > the three-dot menu > Export. You will receive
+**IMDb** — Your Ratings page → the three-dot menu → Export. You will receive
 `ratings.csv` by email or download.
 
-**Letterboxd** — Settings > Import & Export > Export Your Data. Upload the
-`.zip` as it is; Cinetier unpacks it for you. If you do not see an export option
-in your settings, Letterboxd may require a Pro subscription for it; an IMDb
-export works on any account, free or paid.
+**Letterboxd** — Settings → Import & Export → Export Your Data. Upload the
+`.zip` as it is; Cinetier unpacks it for you. If you do not see an export
+option, Letterboxd may require a Pro subscription for it; an IMDb export works
+on any account, free or paid.
 
-Because IMDb does not export watch dates, Cinetier uses your rating date instead
-for IMDb imports, and labels it as such. Letterboxd diary entries carry real
-watch dates.
+Because IMDb does not export watch dates, Cinetier uses your rating date
+instead for IMDb imports, and labels it as such. Letterboxd diary entries carry
+real watch dates.
+
+## Not yet
+
+Keeping more than one saved tier list. One board is saved and restored between
+visits; named boards, and carrying a board to another browser as a file, are on
+the [backlog](docs/superpowers/backlog.md).
 
 ## Running it locally
 
@@ -84,9 +101,10 @@ cp .env.example .env.local   # then add a free TMDB API key
 npm run dev
 ```
 
-Get a TMDB key at https://www.themoviedb.org/settings/api. The key is read-only
-and ships in the client bundle by design — this application has no backend to
-hide it behind.
+Get a key at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api).
+It is read-only and ships in the client bundle by design — this application has
+no backend to hide it behind, which is the same reason it has nowhere to send
+your ratings.
 
 ## Development
 
@@ -98,13 +116,23 @@ npm run typecheck
 npm run build
 ```
 
-Architecture is layered: `parsers/` turns exported files into a unified `Film`
-model, `domain/` holds every rule worth testing as pure TypeScript, `services/`
-owns the only network and storage access, `enrich/` composes those services into
-the progressive TMDB fill-in, and `ui/` renders. `domain/` and `parsers/` import
-nothing from the outer layers, which is enforced by ESLint.
+The layering is enforced by ESLint, not by convention:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+| Layer       | Holds                                          | May import             |
+| ----------- | ---------------------------------------------- | ---------------------- |
+| `parsers/`  | IMDb CSV and Letterboxd ZIP → a unified `Film` | `domain/`              |
+| `domain/`   | every rule worth testing, as pure TypeScript   | nothing outward        |
+| `services/` | the only network and storage access            | `domain/`              |
+| `enrich/`   | the progressive TMDB fill-in                   | `domain/`, `services/` |
+| `ui/`       | React, and nothing else                        | all of the above       |
+
+`domain/` and `parsers/` import nothing from the outer layers and touch no
+browser API — no `fetch`, no `window`, no `localStorage`. That is what lets the
+interesting parts be tested as arithmetic, including where every piece of an
+exported image goes.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and
+[CHANGELOG.md](CHANGELOG.md) for what has landed.
 
 ## Licence
 
@@ -113,5 +141,8 @@ MIT. See [LICENSE](LICENSE).
 ## Attribution
 
 This product uses the TMDB API but is not endorsed or certified by TMDB.
+Posters in the screenshots above are served by TMDB and belong to their
+respective rights holders.
 
-Cinetier is not affiliated with, endorsed by, or connected to IMDb or Letterboxd.
+Cinetier is not affiliated with, endorsed by, or connected to IMDb or
+Letterboxd.

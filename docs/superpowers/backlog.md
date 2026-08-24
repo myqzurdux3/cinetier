@@ -197,13 +197,6 @@ effects and their writers, not the render tree.
   of a closed `<details>` from `getByRole` — every existing control test would keep passing
   while clicking something a person cannot reach. Worth doing with that gap named and a
   browser check standing in for it.
-- **`pointerWithin` and the pinned pool share the bottom of the screen with dnd-kit's
-  auto-scroll band.** dnd-kit scrolls the window when the pointer is inside roughly the
-  bottom quarter of the viewport, and the pool sits there, so moving a card towards the
-  pool to drop it scrolls the rows behind it. The drop still lands in the pool, since the
-  pool is pinned and stays under the cursor, but the page moving underneath is
-  disorienting. Narrowing the auto-scroll threshold, or excluding the pool's rect from it,
-  would settle it.
 - **Pre-fill reads the whole library, not the filtered view.** This is the decision the spec
   took, and it is defensible — thresholds are about ratings, not about what the rail is
   showing. What it looks like from the outside is less defensible: with a filter admitting

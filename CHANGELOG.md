@@ -35,16 +35,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   built from the filtered library. Keyboard operation — space to lift, arrows
   to move, space to drop — has been driven end to end in a browser, and its
   screen-reader announcements are tested.
-- The pool stays pinned to the bottom of the screen while the rows scroll past
-  it, so a row and the pool are always in view together and a film can be
-  dragged from one to the other.
+- On a wide screen the pool is a column of its own beside the board, so a row
+  and the pool are always in view together and a film can be dragged from one
+  to the other. Narrower than that they stack, and holding a card against the
+  top of the window scrolls the page to whatever row you are aiming at.
+- A row's rename, recolour, reorder and remove controls live behind one
+  "Edit rows" switch, so the default board is colour and posters and nothing
+  else.
 - Pre-filling the board from imported ratings, with editable thresholds and a
   count of what each one would place shown before it happens.
 - Rows can be renamed, recoloured, added, removed and reordered. Removing a row
   returns its films to the pool rather than deleting them.
 - The board is remembered between visits, in the browser.
-- Saving the board as a PNG: rows, row colours, posters and the board's name,
-  cropped to the width its longest row actually uses, drawn in whichever theme
-  is on screen. Films whose poster never arrived keep their title, as they do
+- Saving the board as a PNG: a masthead carrying the board's name and what it
+  holds, each row on a panel of its own, posters at twice the layout's
+  resolution, and a footer saying where the picture came from. Drawn in
+  whichever theme is on screen and cropped to the width its longest row
+  actually uses. Films whose poster never arrived keep their title, as they do
   on the board. The cards shrink to keep the image inside what a browser will
   allocate, so a ranking of any size produces a file.
