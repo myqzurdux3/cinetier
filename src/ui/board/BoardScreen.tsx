@@ -5,6 +5,7 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -19,6 +20,7 @@ import { TierRow } from './TierRow';
 import { TierRowControls } from './TierRowControls';
 import { Pool } from './Pool';
 import { destinationFor, type DropTarget } from './dropTarget';
+import { preferPointer } from './collision';
 import { boardAnnouncements, type ItemDescription } from './announcements';
 
 interface BoardScreenProps {
@@ -58,6 +60,11 @@ export function BoardScreen({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  // See collision.ts: closestCenter alone drops a film into whichever row's
+  // centre happens to be nearest, which is not the row under the cursor as
+  // soon as two rows differ in height.
+  const collisionDetection = preferPointer(pointerWithin, closestCenter);
+
   const describe = (id: string): ItemDescription | null => {
     if (id === 'pool') return { title: 'Pool', where: 'the pool' };
 
@@ -96,7 +103,7 @@ export function BoardScreen({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={collisionDetection}
       onDragStart={(event: DragStartEvent) => {
         setActiveId(String(event.active.id));
       }}
