@@ -13,9 +13,11 @@ was written for, it says so.
 
 ## Running them
 
-Playwright is not a dependency of this project: installing it downloads a
-browser, which is a large cost to put on every `npm install` and every CI run
-for a suite that is not part of the gate. Install it when you want to run these.
+These run in CI, in a `browser` job of their own, against the production build.
+Playwright is still not a dependency of this project — the package downloads a
+browser on install, which every contributor's `npm install` would pay for to run
+a suite most of them never run — so the job installs it itself and caches the
+browser. Locally, install it when you want to run these.
 
 ```bash
 npm install --no-save playwright
@@ -45,5 +47,3 @@ one Playwright's pinned revision does not match.
 - A real screen reader. What is asserted is the text dnd-kit puts in the live
   region, which is what a screen reader would read, not the reading itself.
 - Touch. Every drag here is a mouse.
-- CI. These run by hand; the gate is still `npm run test:run`, `lint`,
-  `typecheck` and `build`.
