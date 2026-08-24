@@ -106,7 +106,7 @@ export function BoardScreen({
       }}
       accessibility={{ announcements: boardAnnouncements(describe) }}
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="space-y-2">
           {board.tiers.map((tier, index) => (
             <TierRow
@@ -126,7 +126,27 @@ export function BoardScreen({
           ))}
         </div>
 
-        <Pool films={poolFilms} search={search} onSearchChange={onSearchChange} />
+        {/*
+          The pool is pinned to the bottom of the viewport while the rows
+          scroll past behind it, and settles into place at the end of the
+          document.
+
+          Six rows of posters and a pool are together taller than a laptop
+          screen, and you cannot drag a film to a row you cannot see. Giving
+          the rows a scroll pane of their own looked like the answer and is
+          not: dnd-kit auto-scrolls the scroll ancestors of the *dragged card*,
+          never the container it is heading for, so a pane the pool does not
+          live inside would never scroll during a drag — measured, it does not
+          move a pixel. The window is an ancestor of every card, so window
+          auto-scroll does work: drag towards the top edge and the page scrolls
+          up to whatever row you want, with the pool still under your cursor.
+
+          The opaque background is load-bearing. Without it the rows show
+          through the pool while it is pinned.
+        */}
+        <div className="sticky bottom-0 z-10 -mx-1 bg-screen px-1 pb-2 pt-2">
+          <Pool films={poolFilms} search={search} onSearchChange={onSearchChange} />
+        </div>
       </div>
 
       {/* The pool is virtualised: a card dragged out of it can be unmounted

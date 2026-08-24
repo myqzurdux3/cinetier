@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-const css = readFileSync('src/index.css', 'utf8');
+// Comments are stripped before anything looks for a selector. These helpers
+// find a block by `indexOf` on its opening text, and the prose in that file
+// discusses the very selectors they search for — a sentence mentioning
+// [data-theme='neon'] sent the parser into a comment and quietly emptied the
+// neon theme, which read as "neon defines nothing" instead of as a bad parse.
+const css = readFileSync('src/index.css', 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
 function tokens(opening: string): Record<string, string> {
   const start = css.indexOf(opening);
@@ -36,9 +41,13 @@ function ratio(a: string, b: string): number {
   return (light! + 0.05) / (dark! + 0.05);
 }
 
+// The default theme is @theme plus the plain `:root` rule that carries the
+// tier palette (src/index.css explains why the palette cannot live in @theme).
+const DEFAULT_THEME = { ...tokens('@theme'), ...tokens(':root') };
+
 const THEMES = {
-  'salle obscure': { ...tokens('@theme') },
-  neon: { ...tokens('@theme'), ...tokens("[data-theme='neon']") },
+  'salle obscure': DEFAULT_THEME,
+  neon: { ...DEFAULT_THEME, ...tokens("[data-theme='neon']") },
 };
 
 type Combo = [pair: string, foreground: string, background: string];

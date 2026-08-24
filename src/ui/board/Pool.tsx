@@ -19,7 +19,7 @@ export function Pool({ films, search, onSearchChange }: PoolProps) {
     <section
       ref={setNodeRef}
       aria-label="Pool"
-      className={`space-y-2 rounded-card border p-2 ${isOver ? 'border-accent' : 'border-line'}`}
+      className={`shrink-0 space-y-2 rounded-card border p-2 ${isOver ? 'border-accent' : 'border-line'}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-ink-dim">
@@ -48,7 +48,18 @@ export function Pool({ films, search, onSearchChange }: PoolProps) {
             : 'No film in the pool matches that search.'}
         </p>
       ) : (
-        <FilmGrid films={films} renderCard={(film) => <BoardCard film={film} tierId={null} />} />
+        <FilmGrid
+          films={films}
+          renderCard={(film) => <BoardCard film={film} tierId={null} />}
+          // The pool shares one screen with the tier rows, so it takes a
+          // fraction of the viewport rather than the 78vh the library grid
+          // takes when it owns the screen. A pool that pushes every row off
+          // the top is a pool nothing can be dragged out of.
+          heightClass="h-[24dvh] min-h-32"
+          // Roughly the width of a card inside a row (w-16/w-20), so a film is
+          // the same size on both sides of the drag.
+          columnWidth={84}
+        />
       )}
     </section>
   );

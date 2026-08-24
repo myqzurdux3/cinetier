@@ -12,8 +12,9 @@
 @source '../index.html';
 
 /*
-  Salle obscure is the default theme, so its values live on :root rather than
-  behind a selector — a page with no data-theme attribute is already correct.
+  Salle obscure is the default theme, so its values live on the root element
+  rather than behind a selector — a page with no data-theme attribute is
+  already correct.
   Vidéoclub néon redefines the same names below and nothing else: no component
   knows a theme exists, so none of them needs testing twice.
 */

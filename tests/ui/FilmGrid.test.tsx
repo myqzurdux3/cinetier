@@ -194,6 +194,29 @@ describe('deriveColumnCount', () => {
     expect(deriveColumnCount(600)).toBe(4);
     expect(deriveColumnCount(750)).toBe(5);
   });
+
+  it('follows a narrower column width when one is given', () => {
+    // The board's pool asks for thumbnails the size of a card in a tier row,
+    // not posters. Same container, more columns.
+    expect(deriveColumnCount(1200, 84)).toBe(14);
+    expect(deriveColumnCount(600, 84)).toBe(7);
+  });
+
+  it('lets a narrower column width past the library grid ceiling of 8', () => {
+    // 8 was the library's fixed desktop count and stays its cap. Applying it to
+    // 84px columns would leave two thirds of a desktop row empty, which is the
+    // pool with a handful of huge gaps in it.
+    expect(deriveColumnCount(1200)).toBe(8);
+    expect(deriveColumnCount(1200, 84)).toBeGreaterThan(8);
+  });
+
+  it('still caps a narrow column width, rather than growing without bound', () => {
+    expect(deriveColumnCount(5000, 84)).toBe(16);
+  });
+
+  it('keeps the floor of two columns whatever the column width', () => {
+    expect(deriveColumnCount(100, 84)).toBe(2);
+  });
 });
 
 describe('deriveRowPitch', () => {

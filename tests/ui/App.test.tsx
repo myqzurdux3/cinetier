@@ -166,9 +166,12 @@ describe('App persistence', () => {
     expect(
       await screen.findByRole('button', { name: /import a different export/i }),
     ).toBeInTheDocument();
-    // Scoped to a span: Pool's own "N films to place" count also matches
-    // /2 films/ once the board (with its pool) renders alongside the header.
-    expect(screen.getByText(/2 films/, { selector: 'span' })).toBeInTheDocument();
+    // An exact string, not /2 films/: the pool's "N films to place" and the
+    // pre-fill summary's "would place N films" both *contain* that phrase once
+    // the board renders alongside the header, and both have broken this
+    // assertion at different points in this file's life. Only the header's own
+    // span reads exactly "2 films".
+    expect(screen.getByText('2 films', { selector: 'span' })).toBeInTheDocument();
   });
 
   it('saves the enriched library only after enrichment settles, not before', async () => {
