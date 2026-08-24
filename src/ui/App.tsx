@@ -62,6 +62,9 @@ export default function App() {
   );
   const [poolSearch, setPoolSearch] = useState('');
   const [confirmingReset, setConfirmingReset] = useState(false);
+  // Off by default: five controls on every row is a hundred and eighty pixels
+  // of chrome above a board, and renaming a row is not what anyone came for.
+  const [editingRows, setEditingRows] = useState(false);
   const boardValue = history.present;
 
   // What the last recorded edit was, and the history it was recorded into.
@@ -463,6 +466,16 @@ export default function App() {
                   >
                     Redo
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingRows((editing) => !editing);
+                    }}
+                    aria-expanded={editingRows}
+                    className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent"
+                  >
+                    {editingRows ? 'Done editing rows' : 'Edit rows'}
+                  </button>
                   <ExportButton board={boardValue} films={films} />
                 </div>
 
@@ -475,6 +488,7 @@ export default function App() {
                   search={poolSearch}
                   onSearchChange={setPoolSearch}
                   dispatch={dispatch}
+                  editingRows={editingRows}
                   poolNotice={
                     filtered ? (
                       <NoResults films={films} criteria={criteria} onChange={updateCriteria} />

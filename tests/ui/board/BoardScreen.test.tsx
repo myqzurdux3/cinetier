@@ -19,6 +19,7 @@ function renderScreen(overrides: Partial<Parameters<typeof BoardScreen>[0]> = {}
       search=""
       onSearchChange={vi.fn()}
       dispatch={dispatch}
+      editingRows
       {...overrides}
     />,
   );

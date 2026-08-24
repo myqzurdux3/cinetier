@@ -750,6 +750,34 @@ describe('App board', () => {
     expect(undoButton).toBeDisabled();
   });
 
+  it("keeps a row's edit controls out of the way until they are asked for", async () => {
+    // Five controls on every row is a hundred and eighty pixels of chrome
+    // above a board that has to share a screen with its pool, and renaming a
+    // row is not what anyone came here to do. The switch is one for the whole
+    // board rather than one per row: turning it on is a mode, not six clicks.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+
+    const toggle = await screen.findByRole('button', { name: 'Edit rows' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText('Row S label')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove row S' })).not.toBeInTheDocument();
+
+    await userEvent.click(toggle);
+
+    expect(screen.getByLabelText('Row S label')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove row S' })).toBeInTheDocument();
+    // Every row at once, not just the first.
+    expect(screen.getByLabelText('Row F label')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Done editing rows' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Done editing rows' }));
+    expect(screen.queryByLabelText('Row S label')).not.toBeInTheDocument();
+  });
+
   it('undoes a whole rename in one step, not one character at a time', async () => {
     // HISTORY_LIMIT is 50 and a row label holds 24 characters, so recording a
     // history entry per keystroke lets two full renames evict an entire
@@ -763,6 +791,9 @@ describe('App board', () => {
     // Held by reference, not re-queried: the input's accessible name embeds
     // the label it is editing ("Row S label"), so it changes as you type and a
     // re-query would fail on the name rather than on the value under test.
+    // Row controls live behind the board's "Edit rows" switch — the default
+    // board is colour and posters and nothing else.
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit rows' }));
     const label = await screen.findByLabelText('Row S label');
     expect(label).toHaveValue('S');
     await userEvent.type(label, 'uper');
@@ -781,6 +812,8 @@ describe('App board', () => {
 
     // Held by reference, not re-queried: each input's accessible name embeds
     // the label it is editing ("Row S label"), so it changes as you type.
+    // Row controls live behind the board's "Edit rows" switch.
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit rows' }));
     const rowS = await screen.findByLabelText('Row S label');
     await userEvent.type(rowS, 'x');
     const rowA = screen.getByLabelText('Row A label');
@@ -816,7 +849,9 @@ describe('App board', () => {
     const row = await screen.findByRole('list', { name: /^S — 1 film$/ });
     expect(row).toHaveTextContent('Heat');
 
-    // First edit to row S: its own undo entry.
+    // First edit to row S: its own undo entry. Row controls live behind the
+    // board's "Edit rows" switch.
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit rows' }));
     const rowS = await screen.findByLabelText('Row S label');
     await userEvent.type(rowS, 'uper');
     expect(rowS).toHaveValue('Super');

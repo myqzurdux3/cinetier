@@ -18,11 +18,20 @@ interface PoolProps {
    * knows nothing about filters; it renders what it is handed.
    */
   notice?: ReactNode;
+  /**
+   * True where the pool has a column of its own and can use the height of the
+   * screen; false where it sits under the board and has to leave room for it.
+   */
+  tall?: boolean;
 }
 
-export function Pool({ films, search, onSearchChange, notice }: PoolProps) {
+export function Pool({ films, search, onSearchChange, notice, tall = false }: PoolProps) {
   const searchId = useId();
   const { setNodeRef, isOver } = useDroppable({ id: POOL_ID, data: { type: 'pool' } });
+  // One height, used by the grid and by the message that stands in for it —
+  // an empty pool is exactly when something is dropped into it, and as a bare
+  // line of prose it was a strip too thin to aim at.
+  const gridHeight = tall ? 'xl:h-[calc(100dvh-11rem)] h-[26dvh] min-h-40' : 'h-[26dvh] min-h-40';
 
   return (
     <section
@@ -34,24 +43,29 @@ export function Pool({ films, search, onSearchChange, notice }: PoolProps) {
       data-pool="true"
       className={`shrink-0 space-y-2 rounded-card border p-2 ${isOver ? 'border-accent' : 'border-line'}`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/*
+        Count above, search below, each on its own full-width line. Side by
+        side they fit the full-width pool and break badly in the narrow column
+        the pool gets on a wide screen — "Search the pool" wrapping onto two
+        lines beside a one-line count.
+      */}
+      <div className="space-y-2">
         <p className="text-sm text-ink-dim">
           {films.length === 1 ? '1 film to place' : `${String(films.length)} films to place`}
         </p>
-        <div className="flex items-center gap-2">
-          <label htmlFor={searchId} className="text-sm text-ink-dim">
-            Search the pool
-          </label>
-          <input
-            id={searchId}
-            type="search"
-            value={search}
-            onChange={(event) => {
-              onSearchChange(event.target.value);
-            }}
-            className="rounded-card border border-line bg-surface px-2 py-1 text-sm text-ink focus:ring-2 focus:ring-accent"
-          />
-        </div>
+        <label htmlFor={searchId} className="sr-only">
+          Search the pool
+        </label>
+        <input
+          id={searchId}
+          type="search"
+          value={search}
+          placeholder="Search the pool"
+          onChange={(event) => {
+            onSearchChange(event.target.value);
+          }}
+          className="w-full rounded-card border border-line bg-surface px-2 py-1 text-sm text-ink placeholder:text-ink-dim focus:ring-2 focus:ring-accent"
+        />
       </div>
 
       {notice ?? null}
@@ -62,7 +76,9 @@ export function Pool({ films, search, onSearchChange, notice }: PoolProps) {
         // of prose it was a sixty-pixel strip at the bottom of the screen —
         // aiming a card at it missed by two pixels and the film landed in the
         // tier row behind instead.
-        <p className="flex h-[24dvh] min-h-32 items-center justify-center p-4 text-center text-sm text-ink-dim">
+        <p
+          className={`flex ${gridHeight} items-center justify-center p-4 text-center text-sm text-ink-dim`}
+        >
           {search === ''
             ? 'Every film is placed. Drag one back here to unrank it.'
             : 'No film in the pool matches that search.'}
@@ -75,7 +91,7 @@ export function Pool({ films, search, onSearchChange, notice }: PoolProps) {
           // fraction of the viewport rather than the 78vh the library grid
           // takes when it owns the screen. A pool that pushes every row off
           // the top is a pool nothing can be dragged out of.
-          heightClass="h-[24dvh] min-h-32"
+          heightClass={gridHeight}
           // Roughly the width of a card inside a row (w-16/w-20), so a film is
           // the same size on both sides of the drag.
           columnWidth={84}

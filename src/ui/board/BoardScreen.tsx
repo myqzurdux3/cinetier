@@ -33,6 +33,8 @@ interface BoardScreenProps {
   search: string;
   onSearchChange: (next: string) => void;
   dispatch: (action: BoardAction) => void;
+  /** Whether each row shows its rename, recolour, reorder and remove controls. */
+  editingRows: boolean;
   /** Passed straight through to the pool — see `PoolProps.notice`. */
   poolNotice?: ReactNode;
 }
@@ -45,6 +47,7 @@ export function BoardScreen({
   onSearchChange,
   dispatch,
   poolNotice,
+  editingRows,
 }: BoardScreenProps) {
   const byId = useMemo(() => new Map(films.map((film) => [film.id, film])), [films]);
 
@@ -118,8 +121,8 @@ export function BoardScreen({
       autoScroll={{ canScroll: mayAutoScroll }}
       accessibility={{ announcements: boardAnnouncements(describe) }}
     >
-      <div className="space-y-3">
-        <div className="space-y-2">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+        <div className="min-w-0 flex-1 space-y-2">
           {board.tiers.map((tier, index) => (
             <TierRow
               key={tier.id}
@@ -128,40 +131,50 @@ export function BoardScreen({
                 .map((id) => byId.get(id))
                 .filter((film): film is Film => film !== undefined)}
             >
-              <TierRowControls
-                tier={tier}
-                index={index}
-                tierCount={board.tiers.length}
-                dispatch={dispatch}
-              />
+              {/*
+                Five controls on every row is a hundred and eighty pixels of
+                chrome above a board that has to share a screen with its pool,
+                and renaming a row is not what anyone came here to do. They are
+                revealed together, by one switch, so the default board is
+                colour and posters and nothing else.
+              */}
+              {editingRows && (
+                <TierRowControls
+                  tier={tier}
+                  index={index}
+                  tierCount={board.tiers.length}
+                  dispatch={dispatch}
+                />
+              )}
             </TierRow>
           ))}
         </div>
 
         {/*
-          The pool is pinned to the bottom of the viewport while the rows
-          scroll past behind it, and settles into place at the end of the
-          document.
+          The pool is the third column of the workspace on a wide screen, and
+          stays in view as the rows scroll past beside it.
 
-          Six rows of posters and a pool are together taller than a laptop
-          screen, and you cannot drag a film to a row you cannot see. Giving
-          the rows a scroll pane of their own looked like the answer and is
-          not: dnd-kit auto-scrolls the scroll ancestors of the *dragged card*,
-          never the container it is heading for, so a pane the pool does not
-          live inside would never scroll during a drag — measured, it does not
-          move a pixel. The window is an ancestor of every card, so window
-          auto-scroll does work: drag towards the top edge and the page scrolls
-          up to whatever row you want, with the pool still under your cursor.
+          A row and the pool have to be on screen together — you cannot drag a
+          film to a row you cannot see, and there is no scrolling mid-drag —
+          and six rows of posters plus a pool are taller than a laptop screen.
+          A column of its own solves that by not competing for the same
+          vertical space at all: nothing overlaps, nothing is painted over
+          anything, and the rows keep the full height of the page.
 
-          The opaque background is load-bearing. Without it the rows show
-          through the pool while it is pinned.
+          Narrower than `xl` there is no room for three columns, so the pool
+          goes back under the board and the page scrolls as a document does.
+          Reaching an off-screen row still works there: the window is a scroll
+          ancestor of every card, so holding one against the top edge scrolls
+          the page up to whatever row you want, and the drag overlay carries
+          the card while the pool leaves the screen behind it.
         */}
-        <div className="sticky bottom-0 z-10 -mx-1 bg-screen px-1 pb-2 pt-2">
+        <div className="xl:sticky xl:top-4 xl:w-72 xl:shrink-0 2xl:w-80">
           <Pool
             films={poolFilms}
             search={search}
             onSearchChange={onSearchChange}
             notice={poolNotice}
+            tall
           />
         </div>
       </div>
