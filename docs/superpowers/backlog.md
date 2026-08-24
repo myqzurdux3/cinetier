@@ -67,10 +67,20 @@ plan already built: every board carries an `id` and a `name` (`createBoard(id, n
 tiers)`), and `services/boards.ts` keys the `boards` object store by `id`. Plan B adds a
 screen, not a migration.
 
-### PNG export and the JSON envelope are the plan after that
+### ~~PNG export~~, and the JSON envelope, are the plan after that
 
-Both are the spec's third plan, named explicitly in its own "what stays for later" line.
-This plan added no export path of any kind.
+Both were the spec's third plan, named explicitly in its own "what stays for later" line.
+
+PNG export shipped on 2026-08-24. The geometry is `src/domain/boardLayout.ts`, arithmetic
+over numbers with no DOM in it; the drawing is `src/ui/board/exportPng.ts`, which paints
+through an interface narrow enough for a test to hand it a recorder instead of a canvas —
+jsdom has no 2D context, so the split is what makes either half testable. Colours come from
+the document's custom properties, so both themes export correctly and a third would too.
+Verified in a browser in both themes, with and without real posters from TMDB.
+
+The JSON envelope — a saved board as a file you can carry to another browser — is still
+unbuilt, and is now the more useful of the two, since a PNG is a picture of a ranking and
+not the ranking itself.
 
 ### The undo history does not survive a reload
 
