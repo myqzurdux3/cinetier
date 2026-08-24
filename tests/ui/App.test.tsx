@@ -10,6 +10,8 @@ import type { FilterCriteria } from '@/domain/filters';
 import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
 import { importFiles, type ImportOutcome } from '@/ui/import/importFiles';
 import type { Film } from '@/domain/film';
+import { saveBoard, loadFirstBoard, clearBoards } from '@/services/boards';
+import { createBoard, moveFilm, type TierBoard } from '@/domain/tiers';
 
 vi.mock('@/services/library', () => ({
   loadLibrary: vi.fn(),
@@ -30,6 +32,12 @@ vi.mock('@/services/filters', () => ({
 vi.mock('@/enrich/enrichDetails', () => ({
   enrichDetails: vi.fn(),
   countPendingDetails: vi.fn(),
+}));
+
+vi.mock('@/services/boards', () => ({
+  saveBoard: vi.fn(),
+  loadFirstBoard: vi.fn(),
+  clearBoards: vi.fn(),
 }));
 
 // Real by default — this file otherwise deliberately drives real parsing
@@ -84,6 +92,17 @@ async function importFixture() {
   await userEvent.upload(input, new File([imdbCsv], 'ratings.csv', { type: 'text/csv' }));
 }
 
+/**
+ * "Import a different export" now only opens the confirmation dialog — reset
+ * itself happens on its destructive action. Every test below that means "and
+ * actually reset" goes through both clicks.
+ */
+async function resetLibrary() {
+  const resetButton = await screen.findByRole('button', { name: /import a different export/i });
+  await userEvent.click(resetButton);
+  await userEvent.click(screen.getByRole('button', { name: /delete everything/i }));
+}
+
 // jsdom reports every element's size as 0, so @tanstack/react-virtual's
 // viewport measurement (offsetHeight/offsetWidth) sees an empty scroll
 // container and FilmGrid renders no rows at all — see tests/ui/FilmGrid.test.tsx
@@ -129,6 +148,12 @@ beforeEach(() => {
   // mockReset() would wipe that out for every test, not just the one that
   // deliberately overrides it.
   vi.mocked(importFiles).mockClear();
+
+  // None of these tests starts with a restored board unless it says so
+  // explicitly.
+  vi.mocked(loadFirstBoard).mockReset().mockResolvedValue(null);
+  vi.mocked(saveBoard).mockReset().mockResolvedValue(undefined);
+  vi.mocked(clearBoards).mockReset().mockResolvedValue(undefined);
 });
 
 describe('App persistence', () => {
@@ -141,7 +166,12 @@ describe('App persistence', () => {
     expect(
       await screen.findByRole('button', { name: /import a different export/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/2 films/)).toBeInTheDocument();
+    // An exact string, not /2 films/: the pool's "N films to place" and the
+    // pre-fill summary's "would place N films" both *contain* that phrase once
+    // the board renders alongside the header, and both have broken this
+    // assertion at different points in this file's life. Only the header's own
+    // span reads exactly "2 films".
+    expect(screen.getByText('2 films', { selector: 'span' })).toBeInTheDocument();
   });
 
   it('saves the enriched library only after enrichment settles, not before', async () => {
@@ -164,8 +194,7 @@ describe('App persistence', () => {
     vi.mocked(loadLibrary).mockResolvedValue([film('a')]);
     render(<App />);
 
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
 
     expect(clearLibrary).toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
@@ -184,8 +213,7 @@ describe('App persistence', () => {
     render(<App />);
     await importFixture();
 
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
     expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
 
     // The stale restore now resolves with the library the user just discarded.
@@ -218,8 +246,7 @@ describe('App persistence', () => {
     vi.mocked(clearLibrary).mockRejectedValue(new Error('IndexedDB is unavailable'));
 
     render(<App />);
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
 
     await waitFor(() => expect(consoleError).toHaveBeenCalled());
     // The screen still resets even though the underlying delete failed.
@@ -300,8 +327,7 @@ describe('App enrichment races', () => {
     render(<App />);
     await importFixture();
 
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
     expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
 
     // The discarded run keeps resolving films one by one, then finishes.
@@ -332,8 +358,7 @@ describe('App enrichment races', () => {
     render(<App />);
     await importFixture();
 
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
     await importFixture();
     await waitFor(() => expect(runs).toHaveLength(2));
 
@@ -467,6 +492,23 @@ describe('App filter rail', () => {
     render(<App />);
 
     expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument();
+  });
+
+  it('keeps the board on screen when the filters admit nothing', async () => {
+    // The rail narrows the pool and nothing else: a row keeps its films
+    // whatever the criteria say. Replacing the whole board with the
+    // explanation — which is what used to happen — made one criterion too many
+    // look like the ranking had been lost.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 10 })]);
+    vi.mocked(loadFilters).mockResolvedValue({ minRating: 90 });
+
+    render(<App />);
+
+    expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument();
+    // Every default row, still there, still droppable.
+    for (const label of ['S', 'A', 'B', 'C', 'D', 'F']) {
+      expect(screen.getByRole('list', { name: new RegExp(`^${label} —`) })).toBeInTheDocument();
+    }
   });
 
   it('does not show the empty-library explainer for a genuinely empty library', async () => {
@@ -634,8 +676,7 @@ describe('App filter rail', () => {
     await importFixture();
     await waitFor(() => expect(saveLibrary).toHaveBeenCalled());
 
-    const resetButton = await screen.findByRole('button', { name: /import a different export/i });
-    await userEvent.click(resetButton);
+    await resetLibrary();
 
     held.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -669,5 +710,287 @@ describe('App filter rail', () => {
     );
 
     consoleError.mockRestore();
+  });
+});
+
+describe('App board', () => {
+  it('restores a saved board and shows its placements', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    vi.mocked(loadFirstBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
+    );
+
+    render(<App />);
+
+    const row = await screen.findByRole('list', { name: /^S — 1 film$/ });
+    expect(row).toHaveTextContent('Heat');
+  });
+
+  it('does not offer undo before anything has been done', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+    expect(await screen.findByRole('button', { name: 'Undo' })).toBeDisabled();
+  });
+
+  it('does not offer undo after an action that changed nothing', async () => {
+    // The guard in dispatch says an action that changed nothing must not
+    // become an undo step, and it compares by reference — which only means
+    // anything if the reducer actually hands back the board it was given.
+    // "Send everything back to the pool" on a board with nothing placed is the
+    // cheapest way to press an action that changes nothing: the button is
+    // always offered, so it is easy to do by accident, and before this it
+    // pushed an identical board and left Ctrl+Z looking broken.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+
+    const undoButton = await screen.findByRole('button', { name: 'Undo' });
+    await userEvent.click(
+      screen.getByRole('button', { name: /send everything back to the pool/i }),
+    );
+    expect(undoButton).toBeDisabled();
+  });
+
+  it('gives the library screen a level-one heading of its own', async () => {
+    // The landing page has one and it is gone by the time this renders; the
+    // wordmark in the shell is a span, not a heading. Without this the whole
+    // application, once a library is loaded, is a document whose heading list
+    // starts at level two — which is what axe reported.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a')]);
+    render(<App />);
+
+    await screen.findByRole('button', { name: /import a different export/i });
+    const headings = screen.getAllByRole('heading', { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveTextContent(/your library/i);
+  });
+
+  it('does not let a board edit throw away a slow filters restore', async () => {
+    // The board's "an edit wins over a restore" guard used to be the same ref
+    // the filters restore reads, so a first drag landing before a slow
+    // IndexedDB read silently discarded the criteria the user had saved. The
+    // two answer different questions and now have a ref each.
+    const filtersDeferred = deferred<FilterCriteria | null>();
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat', rating: 10 })]);
+    vi.mocked(loadFilters).mockReturnValue(filtersDeferred.promise);
+    vi.mocked(loadFirstBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
+    );
+
+    render(<App />);
+    await screen.findByRole('button', { name: /import a different export/i });
+
+    // A real board edit, before the filters have arrived.
+    await userEvent.click(
+      screen.getByRole('button', { name: /send everything back to the pool/i }),
+    );
+
+    filtersDeferred.resolve({ minRating: 90 });
+
+    // The criteria still apply: rating 10 is below 90, so nothing matches.
+    expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument();
+  });
+
+  it("keeps a row's edit controls out of the way until they are asked for", async () => {
+    // Five controls on every row is a hundred and eighty pixels of chrome
+    // above a board that has to share a screen with its pool, and renaming a
+    // row is not what anyone came here to do. The switch is one for the whole
+    // board rather than one per row: turning it on is a mode, not six clicks.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+
+    const toggle = await screen.findByRole('button', { name: 'Edit rows' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText('Row S label')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove row S' })).not.toBeInTheDocument();
+
+    await userEvent.click(toggle);
+
+    expect(screen.getByLabelText('Row S label')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove row S' })).toBeInTheDocument();
+    // Every row at once, not just the first.
+    expect(screen.getByLabelText('Row F label')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Done editing rows' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Done editing rows' }));
+    expect(screen.queryByLabelText('Row S label')).not.toBeInTheDocument();
+  });
+
+  it('undoes a whole rename in one step, not one character at a time', async () => {
+    // HISTORY_LIMIT is 50 and a row label holds 24 characters, so recording a
+    // history entry per keystroke lets two full renames evict an entire
+    // ranking session. Consecutive edits to the same field are one edit as far
+    // as undo is concerned — the way every text editor treats a run of typing.
+    // Ctrl+Z is deliberately declined inside an input, so the Undo button is
+    // the only route back and it must not need one click per character.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+
+    // Held by reference, not re-queried: the input's accessible name embeds
+    // the label it is editing ("Row S label"), so it changes as you type and a
+    // re-query would fail on the name rather than on the value under test.
+    // Row controls live behind the board's "Edit rows" switch — the default
+    // board is colour and posters and nothing else.
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit rows' }));
+    const label = await screen.findByLabelText('Row S label');
+    expect(label).toHaveValue('S');
+    await userEvent.type(label, 'uper');
+    expect(label).toHaveValue('Super');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(label).toHaveValue('S');
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  });
+
+  it('keeps a rename of a different row as its own undo step', async () => {
+    // Coalescing is per field, not per action type: renaming two rows is two
+    // edits, and undo returns them one at a time.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+
+    // Held by reference, not re-queried: each input's accessible name embeds
+    // the label it is editing ("Row S label"), so it changes as you type.
+    // Row controls live behind the board's "Edit rows" switch.
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit rows' }));
+    const rowS = await screen.findByLabelText('Row S label');
+    await userEvent.type(rowS, 'x');
+    const rowA = screen.getByLabelText('Row A label');
+    // Two characters, so one Undo click distinguishes "one entry per field"
+    // from "one entry per keystroke" — with a single character both would
+    // leave the same value behind.
+    await userEvent.type(rowA, 'ce');
+    expect(rowA).toHaveValue('Ace');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(rowA).toHaveValue('A');
+    expect(rowS).toHaveValue('Sx');
+  });
+
+  it('does not let a null-key edit be swallowed into the next rename of the same row', async () => {
+    // coalesceKey returns null for an action that stands on its own (here,
+    // "send everything back to the pool" — clearToPool). The dispatch guard
+    // is supposed to clear lastEdit on that branch so a *later* rename of the
+    // same row cannot mistake it for a continuation of the rename that came
+    // before it. Reached via clearToPool rather than a real drag: dnd-kit's
+    // sensors read getBoundingClientRect, which jsdom always reports as all
+    // zeros, so no drag can be driven here (see the two tests this branch
+    // already deleted for exactly that reason) — but clearToPool dispatches
+    // with the same null coalesceKey as `move` and runs through the identical
+    // guard in App's dispatch, so it exercises the code path this test is
+    // about just as well.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    vi.mocked(loadFirstBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
+    );
+    render(<App />);
+
+    const row = await screen.findByRole('list', { name: /^S — 1 film$/ });
+    expect(row).toHaveTextContent('Heat');
+
+    // First edit to row S: its own undo entry. Row controls live behind the
+    // board's "Edit rows" switch.
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit rows' }));
+    const rowS = await screen.findByLabelText('Row S label');
+    await userEvent.type(rowS, 'uper');
+    expect(rowS).toHaveValue('Super');
+
+    // A null-key action that actually changes the board, in between the two
+    // renames. It only clears the row it names back to the pool if something
+    // is placed there, which is why the board above was restored with "Heat"
+    // already in S — clearToPool on an empty board is a no-op and wouldn't
+    // exercise the branch under test at all.
+    await userEvent.click(
+      screen.getByRole('button', { name: /send everything back to the pool/i }),
+    );
+    expect(screen.getByRole('region', { name: 'Pool' })).toHaveTextContent('Heat');
+
+    // Second edit to row S: must be its own undo entry too, not folded into
+    // the first rename just because they share a coalesce key.
+    await userEvent.type(rowS, 'duper');
+    expect(rowS).toHaveValue('Superduper');
+
+    // One Undo must return only the second rename — leaving both the first
+    // rename and the clearToPool in place. If lastEdit were not cleared by
+    // the null-key action, this Undo would instead squash the second rename
+    // into the clearToPool entry, silently discarding it as an undo step and
+    // restoring "Heat" to row S a click early.
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(rowS).toHaveValue('Super');
+    expect(screen.getByRole('region', { name: 'Pool' })).toHaveTextContent('Heat');
+  });
+
+  it('asks before starting over, and names the board', async () => {
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    render(<App />);
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: /import a different export/i }),
+    );
+    expect(screen.getByRole('dialog')).toHaveTextContent('My ranking');
+    expect(clearBoards).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: /delete everything/i }));
+    await waitFor(() => {
+      expect(clearBoards).toHaveBeenCalled();
+    });
+  });
+
+  it('filters the pool without emptying the rows', async () => {
+    // The spec's first decision, end to end: a criterion that excludes a
+    // placed film must not remove it from its row.
+    // 'c' is filtered out (rating 20 < 50) but never placed — the film that
+    // distinguishes poolFor(board, visible) from poolFor(board, films): both
+    // give the same pool count if the only excluded film is also the placed
+    // one, which is exactly the coincidence a prior review caught in this
+    // fixture's earlier, two-film form.
+    vi.mocked(loadLibrary).mockResolvedValue([
+      film('a', { title: 'Kept', rating: 90 }),
+      film('b', { title: 'Cut', rating: 10 }),
+      film('c', { title: 'AlsoCut', rating: 20 }),
+    ]);
+    vi.mocked(loadFirstBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'b', { tierId: 'S', index: 0 }),
+    );
+    vi.mocked(loadFilters).mockResolvedValue({ minRating: 50 });
+
+    render(<App />);
+
+    const row = await screen.findByRole('list', { name: /^S — 1 film$/ });
+    expect(row).toHaveTextContent('Cut');
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: 'Pool' })).toHaveTextContent('1 film to place');
+    });
+  });
+
+  it('does not autosave the fresh default board while a slower restore is still pending', async () => {
+    // Regression: the debounced save fires 400ms after mount regardless of
+    // whether loadFirstBoard() has resolved yet. Without a guard, that save
+    // would write the empty default board over whatever was actually saved
+    // last time — a tab closed in that window loses it for good, and the app
+    // would write a board record even for someone who never opened one.
+    const boardDeferred = deferred<TierBoard | null>();
+    vi.mocked(loadFirstBoard).mockReturnValue(boardDeferred.promise);
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+
+    render(<App />);
+    await screen.findByText('Heat');
+
+    // Real time, not a flush: the debounced save is scheduled with a real
+    // setTimeout, and the restore is still pending when it would fire.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(saveBoard).not.toHaveBeenCalled();
+
+    // The slow restore now resolves with a real board.
+    const restored = moveFilm(createBoard('board-1', 'Mine'), 'a', {
+      tierId: 'S',
+      index: 0,
+    });
+    boardDeferred.resolve(restored);
+
+    await waitFor(() => {
+      expect(saveBoard).toHaveBeenCalledWith(restored);
+    });
   });
 });

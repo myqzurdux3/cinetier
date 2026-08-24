@@ -3,7 +3,6 @@ import { Shell } from './Shell';
 import { Landing } from './Landing';
 import type { ImportSource } from './import/SourcePicker';
 import { ImportGuide } from './import/ImportGuide';
-import { FilmGrid } from './library/FilmGrid';
 import { LibraryHeader } from './library/LibraryHeader';
 import { FilterRail } from './filters/FilterRail';
 import { FilterStatus } from './filters/FilterStatus';
@@ -15,6 +14,35 @@ import { saveFilters, loadFilters, clearFilters } from '@/services/filters';
 import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
 import type { ImportOutcome } from './import/importFiles';
 import type { Film } from '@/domain/film';
+import { boardReducer, type BoardAction } from '@/domain/board';
+import { createBoard, poolFor, type TierBoard } from '@/domain/tiers';
+import { initHistory, record, undo, redo, canUndo, canRedo, type History } from '@/domain/history';
+import { saveBoard, loadFirstBoard, clearBoards } from '@/services/boards';
+import { BoardScreen } from './board/BoardScreen';
+import { ExportButton } from './board/ExportButton';
+import { PrefillPanel } from './board/PrefillPanel';
+import { ResetConfirm } from './ResetConfirm';
+
+/**
+ * Which text field an action is typing into, or null for an action that stands
+ * on its own. Two consecutive actions sharing a key are one edit as far as
+ * undo is concerned.
+ *
+ * Deliberately per-field rather than per-type: renaming row S and then row A
+ * are two separate edits, and undo should return them one at a time.
+ */
+function coalesceKey(action: BoardAction): string | null {
+  switch (action.type) {
+    case 'renameTier':
+      return `renameTier:${action.tierId}`;
+    case 'setThreshold':
+      return `setThreshold:${action.tierId}`;
+    case 'renameBoard':
+      return 'renameBoard';
+    default:
+      return null;
+  }
+}
 
 export default function App() {
   const [source, setSource] = useState<ImportSource | null>(null);
@@ -22,16 +50,87 @@ export default function App() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [skipped, setSkipped] = useState(0);
   const [enriching, setEnriching] = useState<{ done: number; total: number } | null>(null);
-  // Bumped once per import (not the enrichment guard's runId, which is a ref
-  // and does not re-render). This is what tells the grid to replay its
-  // entrance animation.
-  const [generation, setGeneration] = useState(0);
 
   const [criteria, setCriteria] = useState<FilterCriteria>({});
   const [fetchingDetails, setFetchingDetails] = useState<{ done: number; total: number } | null>(
     null,
   );
   const [railOpen, setRailOpen] = useState(false);
+
+  const [history, setHistory] = useState<History<TierBoard>>(() =>
+    initHistory(createBoard('board-1', 'My ranking')),
+  );
+  const [poolSearch, setPoolSearch] = useState('');
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  // Off by default: five controls on every row is a hundred and eighty pixels
+  // of chrome above a board, and renaming a row is not what anyone came for.
+  const [editingRows, setEditingRows] = useState(false);
+  const boardValue = history.present;
+
+  // What the last recorded edit was, and the history it was recorded into.
+  //
+  // The key identifies "the same text field being typed into": consecutive
+  // edits that share one collapse into a single undo step, the way every text
+  // editor treats a run of typing. Without it, a 24-character row label eats
+  // 24 of HISTORY_LIMIT's 50 entries and two renames evict a whole ranking
+  // session — and the Ctrl+Z handler below deliberately declines to act inside
+  // an input, so the only way back would be the Undo button, one character per
+  // click.
+  //
+  // `base` is what makes this safe inside a state updater. React invokes
+  // updaters twice under StrictMode (and may re-run them when a render is
+  // discarded), so a naive `lastEdit.current = key` would see its own write on
+  // the second pass and coalesce an edit it had just recorded, losing the
+  // entry. Holding the history the entry was recorded *into* makes the second
+  // pass recognisable — it arrives with that very same object — so it takes
+  // the same branch and produces the same result.
+  const lastEdit = useRef<{ key: string; base: History<TierBoard> } | null>(null);
+
+  const stepHistory = useCallback((step: (current: History<TierBoard>) => History<TierBoard>) => {
+    // Undo and redo end the run of typing: coalescing a later keystroke into
+    // an entry the user has just stepped away from would rewrite the present
+    // without clearing the future, leaving a redo pointing at a state that no
+    // longer follows from it.
+    lastEdit.current = null;
+    setHistory(step);
+  }, []);
+
+  const dispatch = useCallback((action: BoardAction) => {
+    // A real edit — even to the freshly-created default board, before any
+    // restore has resolved — always wins: over a slow board restore, which
+    // would otherwise clobber the edit and discard its undo stack via
+    // initHistory, and over the "nothing to save yet" guard on the debounced
+    // save below (`boardReady`), so the edit is not silently dropped.
+    //
+    // A ref of its own, not the shared `restoreCancelled`. That one means
+    // "the user replaced or discarded the library", and the filters restore
+    // reads it too — so setting it from here let a first drag that happened to
+    // land before a slow filters read silently throw away the criteria the
+    // user had saved.
+    boardEdited.current = true;
+    boardReady.current = true;
+    setHistory((current) => {
+      const next = boardReducer(current.present, action);
+      // An action that changed nothing must not become an undo step, or the
+      // next Ctrl+Z appears to do nothing at all. Every reducer branch returns
+      // the board it was given when it changes nothing, so this reference
+      // check covers a move that lands where the film already was, a rename to
+      // the same text, a re-clear of an empty board and a row "moved" to its
+      // own index — not just the unknown-id early returns it used to catch.
+      if (next === current.present) return current;
+
+      const key = coalesceKey(action);
+      if (key !== null && lastEdit.current?.key === key && lastEdit.current.base !== current) {
+        // Still typing in the same field: replace the present instead of
+        // pushing another entry. The future is already empty — the entry this
+        // continues cleared it when it was recorded.
+        return { ...current, present: next };
+      }
+
+      lastEdit.current = key === null ? null : { key, base: current };
+      return record(current, next);
+    });
+  }, []);
 
   // Restore whatever was saved last time. `restoreCancelled` is set the moment
   // the user does anything that should win over the restore — starts an
@@ -45,6 +144,14 @@ export default function App() {
   // pre-empt the restore is the only thing immune to that.
   const restoreCancelled = useRef(false);
 
+  /**
+   * Set by any board edit, and read only by the board restore below. Separate
+   * from `restoreCancelled` because they answer different questions: that one
+   * is about the library the user is working on, this one is about whether the
+   * board on screen is still the one that was loaded.
+   */
+  const boardEdited = useRef(false);
+
   // The same idea one step further, for enrichment. An enrichment run outlives
   // the screen that started it — it reports per resolved film for seconds or
   // minutes, and "Import a different export" sits right beside its progress —
@@ -53,6 +160,18 @@ export default function App() {
   // library bumps the id, which makes every later callback from the run that
   // produced it a no-op. Nothing else distinguishes two runs from each other.
   const runId = useRef(0);
+
+  // Guards the debounced board save further down. Without it, the very
+  // first save (400ms after mount) can fire before `loadFirstBoard()` below
+  // has had a chance to resolve, writing the fresh, empty default board over
+  // whatever was actually saved last time — the read simply hasn't caught up
+  // yet. Settled by the board restore, whichever way it goes (found a board
+  // or not, there is nothing left here for a save to clobber), and by
+  // `dispatch` the instant the user makes a real edit. `performReset` flips
+  // it back to false, since the fresh board it creates must not be
+  // autosaved on the very next tick — that would recreate a board record
+  // the confirmation dialog just promised was gone for good.
+  const boardReady = useRef(false);
 
   useEffect(() => {
     loadFilters()
@@ -67,6 +186,57 @@ export default function App() {
         console.error('Failed to restore the saved filters', error);
       });
   }, []);
+
+  useEffect(() => {
+    loadFirstBoard()
+      .then((restored) => {
+        if (restored && !restoreCancelled.current && !boardEdited.current) {
+          setHistory(initHistory(restored));
+        }
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to restore the saved board', error);
+      })
+      .finally(() => {
+        // Settled either way — found a board, found nothing, or failed —
+        // there is nothing left for the debounced save to race against.
+        boardReady.current = true;
+      });
+  }, []);
+
+  useEffect(() => {
+    // Dragging produces a burst of moves; one transaction per frame of that
+    // burst would be pointless work.
+    const id = setTimeout(() => {
+      // Before the restore above has settled, `boardValue` is still the
+      // fresh default board created at mount — saving it here would race
+      // the restore, and if this timer wins, overwrite the real saved board
+      // with an empty one. See `boardReady`.
+      if (!boardReady.current) return;
+      saveBoard(boardValue).catch((error: unknown) => {
+        console.error('Failed to save the board', error);
+      });
+    }, 400);
+    return () => {
+      clearTimeout(id);
+    };
+  }, [boardValue]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') return;
+      // A text field owns its own undo stack; stealing Ctrl+Z from a row's
+      // label input would be worse than not offering it.
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('input, textarea, select')) return;
+      event.preventDefault();
+      stepHistory((current) => (event.shiftKey ? redo(current) : undo(current)));
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [stepHistory]);
 
   const updateCriteria = useCallback((next: FilterCriteria) => {
     setCriteria(next);
@@ -130,7 +300,6 @@ export default function App() {
       restoreCancelled.current = true;
       const id = ++runId.current;
       setFilms(outcome.films);
-      setGeneration((n) => n + 1);
       setWarnings(outcome.warnings);
       setSkipped(outcome.skipped);
       setEnriching({ done: 0, total: outcome.films.length });
@@ -173,7 +342,15 @@ export default function App() {
   // library has been imported yet.
   const visible = useMemo(() => (films ? applyFilters(films, criteria) : []), [films, criteria]);
 
-  function reset() {
+  const poolFilms = useMemo(() => {
+    const pooled = poolFor(boardValue, visible);
+    const needle = poolSearch.trim().toLowerCase();
+    return needle === ''
+      ? pooled
+      : pooled.filter((film) => film.title.toLowerCase().includes(needle));
+  }, [boardValue, visible, poolSearch]);
+
+  function performReset() {
     restoreCancelled.current = true;
     runId.current += 1;
     clearLibrary().catch((error: unknown) => {
@@ -188,6 +365,15 @@ export default function App() {
     clearFilters().catch((error: unknown) => {
       console.error('Failed to clear the saved filters', error);
     });
+    clearBoards().catch((error: unknown) => {
+      console.error('Failed to clear the saved board', error);
+    });
+    boardReady.current = false;
+    // The fresh board has no entry for a later keystroke to coalesce into, so
+    // leaving a stale key here would swallow the first rename after a reset.
+    lastEdit.current = null;
+    setHistory(initHistory(createBoard('board-1', 'My ranking')));
+    setPoolSearch('');
     setSource(null);
   }
 
@@ -206,8 +392,25 @@ export default function App() {
             warnings={warnings}
             skipped={skipped}
             enriching={enriching}
-            onReset={reset}
+            onReset={() => {
+              setConfirmingReset(true);
+            }}
           />
+
+          {confirmingReset && (
+            <ResetConfirm
+              filmCount={films.length}
+              boardName={boardValue.name}
+              placedCount={Object.values(boardValue.placements).flat().length}
+              onConfirm={() => {
+                setConfirmingReset(false);
+                performReset();
+              }}
+              onCancel={() => {
+                setConfirmingReset(false);
+              }}
+            />
+          )}
 
           {/* Below the rail's breakpoint the column becomes a sheet: same
               markup, opened on demand, so nothing has to render twice. */}
@@ -250,11 +453,65 @@ export default function App() {
                 onChange={updateCriteria}
                 showClearAll={!filtered}
               />
-              {filtered ? (
-                <NoResults films={films} criteria={criteria} onChange={updateCriteria} />
-              ) : (
-                <FilmGrid films={visible} generation={generation} />
-              )}
+              {/* The board is rendered whatever the rail says. The rail
+                  narrows the pool and nothing else — a row keeps its films
+                  however tight the criteria get — so a combination that
+                  admits nothing empties the pool and explains itself there,
+                  rather than taking the ranking off the screen. It used to
+                  replace the whole board, which meant one criterion too many
+                  looked like the tier list had been lost. */}
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stepHistory(undo);
+                    }}
+                    disabled={!canUndo(history)}
+                    className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent disabled:opacity-40"
+                  >
+                    Undo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stepHistory(redo);
+                    }}
+                    disabled={!canRedo(history)}
+                    className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent disabled:opacity-40"
+                  >
+                    Redo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingRows((editing) => !editing);
+                    }}
+                    aria-expanded={editingRows}
+                    className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent"
+                  >
+                    {editingRows ? 'Done editing rows' : 'Edit rows'}
+                  </button>
+                  <ExportButton board={boardValue} films={films} />
+                </div>
+
+                <PrefillPanel board={boardValue} films={films} dispatch={dispatch} />
+
+                <BoardScreen
+                  board={boardValue}
+                  films={films}
+                  poolFilms={poolFilms}
+                  search={poolSearch}
+                  onSearchChange={setPoolSearch}
+                  dispatch={dispatch}
+                  editingRows={editingRows}
+                  poolNotice={
+                    filtered ? (
+                      <NoResults films={films} criteria={criteria} onChange={updateCriteria} />
+                    ) : null
+                  }
+                />
+              </div>
             </div>
           </div>
         </div>

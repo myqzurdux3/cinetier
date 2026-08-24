@@ -12,8 +12,9 @@
 @source '../index.html';
 
 /*
-  Salle obscure is the default theme, so its values live on :root rather than
-  behind a selector — a page with no data-theme attribute is already correct.
+  Salle obscure is the default theme, so its values live on the root element
+  rather than behind a selector — a page with no data-theme attribute is
+  already correct.
   Vidéoclub néon redefines the same names below and nothing else: no component
   knows a theme exists, so none of them needs testing twice.
 */
@@ -27,13 +28,6 @@
   --color-accent: #e8b44a;
   --color-on-accent: #0a0908;
   --color-danger: #e86a5c;
-
-  --color-tier-s: #e24b4b;
-  --color-tier-a: #e8823c;
-  --color-tier-b: #e8b44a;
-  --color-tier-c: #9cbf4a;
-  --color-tier-d: #4fa3d1;
-  --color-tier-f: #6f6a60;
 
   /* The accent's halo. Salle obscure is lit, not glowing. */
   --shadow-glow: none;
@@ -50,6 +44,35 @@
   --font-text: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --radius-card: 6px;
+}
+
+/*
+  The tier palette lives here, in a plain rule, and not in @theme above.
+
+  Tailwind v4 emits a @theme variable only when something it scanned asks for
+  it, and every reference to these six is built at runtime — `tierColorVar`
+  composes `var(--color-tier-${color})` from a domain token, and Landing's band
+  does the same. The compiler sees no literal name, so it dropped all six from
+  the default theme; the board's rows and the landing band rendered on
+  transparent backgrounds. (Five of them did. `--color-tier-s` survived purely
+  because a doc comment in src/domain/tiers.ts spells it out, which is not a
+  dependency anything should have.)
+
+  A plain rule is emitted verbatim, exactly as the [data-theme='neon'] block
+  below already is — which is why the neon palette never lost its colours.
+  These names are only ever read through var(); no `bg-tier-s` utility exists
+  or is wanted, so nothing is lost by leaving @theme.
+
+  tests/styles/theme.test.ts compiles this file with Tailwind and fails if any
+  of the six goes missing again.
+*/
+:root {
+  --color-tier-s: #e24b4b;
+  --color-tier-a: #e8823c;
+  --color-tier-b: #e8b44a;
+  --color-tier-c: #9cbf4a;
+  --color-tier-d: #4fa3d1;
+  --color-tier-f: #6f6a60;
 }
 
 [data-theme='neon'] {

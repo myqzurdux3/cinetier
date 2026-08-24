@@ -59,15 +59,60 @@ title plus year, and this is the stated cost of that rule.
 `FilterCriteria` has no `minYear`/`maxYear`, and translating a range into decades answers a
 different question. A later plan can add the axis.
 
+### Named boards are the next plan, not this one
+
+Create, rename, delete and switch between several boards is Plan B of the same spec
+(`docs/superpowers/specs/2026-08-23-cinetier-tier-board-design.md`), whose data model this
+plan already built: every board carries an `id` and a `name` (`createBoard(id, name,
+tiers)`), and `services/boards.ts` keys the `boards` object store by `id`. Plan B adds a
+screen, not a migration.
+
+### ~~PNG export~~, and the JSON envelope, are the plan after that
+
+Both were the spec's third plan, named explicitly in its own "what stays for later" line.
+
+PNG export shipped on 2026-08-24. The geometry is `src/domain/boardLayout.ts`, arithmetic
+over numbers with no DOM in it; the drawing is `src/ui/board/exportPng.ts`, which paints
+through an interface narrow enough for a test to hand it a recorder instead of a canvas —
+jsdom has no 2D context, so the split is what makes either half testable. Colours come from
+the document's custom properties, so both themes export correctly and a third would too.
+Verified in a browser in both themes, with and without real posters from TMDB.
+
+The JSON envelope — a saved board as a file you can carry to another browser — is still
+unbuilt, and is now the more useful of the two, since a PNG is a picture of a ranking and
+not the ranking itself.
+
+### The undo history does not survive a reload
+
+Deliberate: undo that persists would let a user "undo" an edit they have no memory of
+making, possibly minutes or sessions later. A reload starts a fresh history; the board
+itself is still exactly as it was left.
+
 ### `App.tsx` stays as it is, deliberately
 
-At 259 lines, with nine state pieces, two restore effects and two enrichment passes,
-`App.tsx` is the file the filter-rail plan's reviews looked at hardest. Two reviewers
-independently judged it should not be restructured now; the seam that will eventually want
-extracting is the pair of persistence effects and their writers, not the render tree.
+At 437 lines, with eleven state pieces and five effects, `App.tsx` grew again over the
+tier-board plan — it was 259 lines and nine state pieces when the filter-rail plan's two
+reviewers first judged it. A third reviewer, on this plan, reached the same verdict: it
+should not be restructured mid-plan. All three named the same seam — the persistence
+effects and their writers, not the render tree.
 
 ## Robustness
 
+- **The coalescing guard's StrictMode clause cannot be tested, and may be dead.** `App.tsx`'s
+  history coalescing guards on `base !== current`, which exists so that React's development
+  double-invocation cannot make the second pass coalesce into the entry the first pass just
+  recorded. Removing that clause turns no test red. The reason was traced into React 19's own
+  dispatch path: its eager-state computation means no DOM-driven interaction this app can
+  produce makes the canary call's result observable. So the clause is either genuinely dead
+  or it protects a path nothing here can reach — and a test for it was written, mutated,
+  found unfalsifiable, and deleted rather than shipped. Worth settling deliberately: either
+  prove it necessary, or remove it and say why.
+- ~~**First to triage: a board edit can silently cancel a pending filters restore.**~~
+  Closed on 2026-08-24 with the separate ref the entry named. `boardEdited` is set by any
+  board edit and read only by the board restore; `restoreCancelled` keeps its own meaning —
+  the user replaced or discarded the library — and stays shared by the library and filters
+  restores. A test drives the race directly: a slow `loadFilters()`, a real board edit
+  before it resolves, and the criteria still apply afterwards.
 - **A rejected enrichment leaves the progress counter on screen.** It logs, and the reset
   button is always reachable, so nobody is trapped — but the interface says it is still
   working when it has stopped.
@@ -114,6 +159,30 @@ extracting is the pair of persistence effects and their writers, not the render 
 
 ## Performance
 
+- **A drag costs about 75 microseconds per placed film, per pointer move.** Measured against
+  the production build on 2026-08-24, twenty pointer moves each: 400 placed films ≈ 40ms a
+  move, 1000 ≈ 75ms, 2000 ≈ 150ms. Up to a few hundred films the board is fluid; past a
+  thousand a drag visibly stutters, and `Pre-fill from my ratings` on a large library is a
+  one-click route to exactly that.
+
+  The cost is not the DOM. Every card in every row is a dnd-kit context subscriber through
+  `useSortable`, and dnd-kit updates that context several times per pointer move, so every
+  card's hook re-runs — 85,000 component renders across twenty moves on a 1000-film board.
+  Two things were tried and measured, and neither is worth its cost: memoising the card's
+  rendered subtree changes the total by about 1% (the work is in the hook, not the
+  elements), and dropping `horizontalListSortingStrategy` for a null strategy buys 11% at
+  the price of the gap-opening animation that shows where a film will land.
+
+  What would actually work is fewer mounted dnd-kit hooks: rows keeping their droppable
+  while cards inside them become plain elements, with the insertion index computed from the
+  pointer's position in the row rather than from a per-card droppable. That is a real
+  redesign of `dropTarget.ts` and it costs within-row keyboard positioning, which is why it
+  was not done on the way past. Virtualising rows is the other option and the spec rejected
+  it for interacting badly with drag and drop.
+
+- **Rows are not virtualised.** A row holding several hundred films renders every card.
+  Deliberate: virtualising inside a row interacts badly with drag and drop, and no
+  measurement yet says it is needed.
 - **Enrichment copies the whole library per resolved film**, so a 5000-film import performs
   5000 array copies and 5000 React commits. The specification's risk table names libraries
   of that size. Batching progress — every N films, or on an animation frame — is the cheap
@@ -139,6 +208,20 @@ extracting is the pair of persistence effects and their writers, not the render 
 
 ## Interface and copy
 
+- **A row's five edit controls are always on screen, on every row.** At 1280px they fit one
+  line and cost about thirty pixels a row; at 390px they wrap to three lines and a row
+  becomes 185px of mostly buttons. Collapsing them behind a per-row disclosure is the
+  obvious move, and the reason it was not done here is that jsdom does not hide the content
+  of a closed `<details>` from `getByRole` — every existing control test would keep passing
+  while clicking something a person cannot reach. Worth doing with that gap named and a
+  browser check standing in for it.
+- **Pre-fill reads the whole library, not the filtered view.** This is the decision the spec
+  took, and it is defensible — thresholds are about ratings, not about what the rail is
+  showing. What it looks like from the outside is less defensible: with a filter admitting
+  3 of 10 titles, pressing the button places all 10 and the pool drops to "0 films to
+  place", so seven titles the user cannot see moved without a word. The panel's summary now
+  states the count it will place, which helps; naming the set it draws from would help more.
+
 - **`LibrarySummary`'s progress is a conditionally mounted live region** — the pattern that
   was fixed in `DropZone` because screen readers frequently do not announce it. The naive
   fix is wrong here: a polite region over a per-film counter would announce hundreds of
@@ -153,11 +236,19 @@ extracting is the pair of persistence effects and their writers, not the render 
   removal, and `NoResults`'s culprit button targets that same wrapper — which is sound
   because `FilterStatus` is mounted unconditionally in both the filtered and unfiltered
   branches.
-- **`FilmGrid`'s entrance replays on every zero-to-non-zero filter transition.** Its
-  `generation` prop is documented "changes once per import — playing the entrance again is
-  what it means", and a test pins that, but `App` unmounts `FilmGrid` whenever the filters
-  admit nothing, so it remounts with `entering` re-initialised and `generation` unchanged.
-  Cosmetic, but the invariant no longer holds.
+- ~~**`FilmGrid`'s entrance replays on every zero-to-non-zero filter transition.**~~
+  Superseded by the tier-board plan (2026-08-23): `App` no longer renders `FilmGrid`
+  directly, or unmounts it when the filters admit nothing — the board replaced the library
+  screen, and `FilmGrid`'s only caller now is `Pool`. See the next entry for what that leaves
+  behind.
+- **`FilmGrid`'s `generation` prop is now dead in production.** Nothing passes it since the
+  board replaced the grid on the library screen; only its own test file exercises it. The
+  entrance replay it powered is redundant because a new import remounts the grid anyway.
+- **`PrefillPanel` receives the unfiltered library, not the pool.** "Pre-fill from my
+  ratings" can place titles the filter rail is currently hiding, and its preview counts
+  them — the count and the placement agree with each other, just not with what the rail
+  shows on screen. Deliberate: the rail filters the pool and only the pool. User-visible,
+  and unverified by hand.
 - **`<summary>` and the checkboxes take the UA focus ring, not the accent token.** Every
   input and button in the rail carries `focus:ring-accent`; the only keyboard-operable part
   of a *closed* section does not. The specification asks for the accent ring on the section
@@ -179,6 +270,54 @@ extracting is the pair of persistence effects and their writers, not the render 
 
 ## Testing and tooling
 
+- ~~**Nothing in the checked-in suite drives a real browser.**~~ Closed on 2026-08-24:
+  `e2e/board.mjs`, thirteen checks driven through a real Chromium, one per defect that a
+  unit test could not have reached. Not in CI and not a dependency — Playwright downloads a
+  browser, which is a large cost to put on every `npm install` for a suite that is not part
+  of the gate; `e2e/README.md` says how to run it. Two of the thirteen say plainly that they
+  can no longer reproduce the defect they were written for, because it depended on the
+  layout where the pool was pinned over the rows.
+- ~~**The tier board's manual verification gate is entirely outstanding.**~~ Closed on
+  2026-08-24. The Chrome extension was still not connected, so the pass ran through a real
+  Chromium driven by Playwright from the scratchpad instead — a genuine browser with real
+  pointer events, which is what drag and drop needs. Verified by hand there: pool to row,
+  row to row, forward and backward inside one row, and row back to pool, all landing where
+  aimed; the drag overlay tracking the cursor one-for-one, sized like the card, gone on
+  drop; undo and redo from both the buttons and Ctrl+Z / Ctrl+Shift+Z; a full keyboard
+  ranking (space, arrows, space) with the announcements read back at each step; the board
+  surviving a reload; a rename and a recolour done by typing, surviving a reload together
+  with the ranking; dragging the *last* card of a 120-film virtualised pool; adding,
+  removing, reordering rows and sending everything back to the pool; both themes at 1440px
+  and at 390px with no horizontal overflow; and the IndexedDB v2-to-v3 upgrade over a
+  hand-built v2 database, which kept three films with their `watchedAt` still a `Date`,
+  kept the saved filter criteria, and added the `boards` store. Three defects came out of
+  it and are fixed on this branch: the tier palette never reaching the browser, the pool
+  taking 78vh so no row was ever on screen with it, and `closestCenter` dropping a film
+  into whichever row's centre was nearest rather than the one under the cursor. Three more
+  came out of re-running the pass against each fix: an empty pool collapsing to a
+  sixty-pixel strip that could not be hit, a card scrolled out of view in the virtualised
+  pool winning drops aimed at the row behind it, and dnd-kit auto-scrolling the pool's own
+  grid until it unmounted the card being dragged.
+
+  The pass ran through Playwright's own Chromium rather than the extension, and the scripts
+  are throwaway — they live in the session scratchpad, not in the repository. Turning the
+  useful ones into a checked-in end-to-end suite is the obvious next step and has not been
+  taken: every defect above is now covered by a unit test of the rule it broke, but nothing
+  in `npm run test:run` drives a real pointer.
+
+  Still not done by a person: listening to an actual screen reader. What was checked is the
+  text of the live region at each step, which is what a screen reader would read, not the
+  reading itself.
+- **The board's save guard has an untested release path.** The debounced save is suppressed
+  (`boardReady`) until the board restore settles, and released in a `.finally()` so it fires
+  even when `loadFirstBoard()` resolves to `null` — no saved board found. That branch is
+  verified by reading the code, not by a test.
+- **No domain test covers a non-default tier list.** `tierForRating`, `prefill` and
+  `moveFilm` all operate generically on `board.tiers`, but every call to `createBoard` in the
+  test suite omits the third argument and gets `DEFAULT_TIERS`. `createBoard` has accepted a
+  custom `tiers` array since this plan's first task, so covering it would have been a few
+  lines at any point; deferred twice, and recorded here rather than promised to a task that
+  does not exist.
 - **No test pins "the grid renders before enrichment resolves"** — the property the whole
   enrichment architecture exists to provide. It rests on manual browser checks.
   `tests/ui/App.test.tsx` already has the deferred-promise machinery to do it properly.

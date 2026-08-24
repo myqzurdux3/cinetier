@@ -44,7 +44,7 @@ describe('a version bump blocked by a connection open elsewhere', () => {
     // fake-indexeddb) finally proceed with the upgrade.
     v1.close();
     const opened = await opening;
-    expect(opened.version).toBe(2);
+    expect(opened.version).toBe(3);
 
     consoleError.mockRestore();
   });

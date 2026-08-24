@@ -2,6 +2,7 @@ import { openDB, deleteDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { TmdbMatch, TmdbDetails } from './tmdb';
 import type { Film } from '@/domain/film';
 import type { FilterCriteria } from '@/domain/filters';
+import type { TierBoard } from '@/domain/tiers';
 
 export interface CinetierDB extends DBSchema {
   tmdb: {
@@ -20,12 +21,16 @@ export interface CinetierDB extends DBSchema {
     key: string;
     value: { criteria: FilterCriteria; savedAt: number };
   };
+  boards: {
+    key: string;
+    value: TierBoard;
+  };
 }
 
 const NAME = 'cinetier';
-const VERSION = 2;
+const VERSION = 3;
 
-const STORES = ['tmdb', 'tmdbDetails', 'library', 'filters'] as const;
+const STORES = ['tmdb', 'tmdbDetails', 'library', 'filters', 'boards'] as const;
 
 let connection: Promise<IDBPDatabase<CinetierDB>> | null = null;
 

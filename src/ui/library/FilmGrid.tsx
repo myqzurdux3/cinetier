@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Film } from '@/domain/film';
 import { FilmCard } from './FilmCard';
@@ -12,10 +12,34 @@ interface FilmGridProps {
   columns?: number;
   /** Changes once per import. Playing the entrance again is what it means. */
   generation?: number;
+  /**
+   * What to draw in a cell. Defaults to the library's own card; the board's
+   * pool passes a draggable one. The grid owns layout and virtualisation and
+   * has no opinion about the cell.
+   */
+  renderCard?: (film: Film) => ReactNode;
+  /**
+   * How tall the scroll container is, as a Tailwind height class. The library
+   * grid owns the screen and takes most of it; the board's pool shares the
+   * screen with the tier rows and takes far less, because a pool you cannot
+   * see at the same time as a row is a pool you cannot drag out of.
+   */
+  heightClass?: string;
+  /**
+   * Roughly how wide one column should be, which is what decides how many
+   * there are. The library shows posters worth looking at; the pool shows
+   * thumbnails to drag, and matching the rows' card width keeps a film the
+   * same size on both sides of the drag.
+   */
+  columnWidth?: number;
 }
 
 const MIN_COLUMNS = 2;
+// 8 was the library grid's fixed desktop count, and stays its ceiling. The
+// pool asks for narrower columns and so needs a higher one: capping it at 8
+// would leave two thirds of a desktop row empty.
 const MAX_COLUMNS = 8;
+const MAX_COLUMNS_DENSE = 16;
 const COLUMN_WIDTH = 150;
 // Sensible value for the first render, before any ResizeObserver
 // measurement has arrived, and for the jsdom test path where
@@ -38,8 +62,9 @@ const CARD_ASPECT_RATIO = 3 / 2;
  * list) and capped at 8 (today's fixed desktop count, so nothing gets denser
  * than what already shipped).
  */
-export function deriveColumnCount(width: number): number {
-  return Math.max(MIN_COLUMNS, Math.min(MAX_COLUMNS, Math.floor(width / COLUMN_WIDTH)));
+export function deriveColumnCount(width: number, columnWidth: number = COLUMN_WIDTH): number {
+  const cap = columnWidth < COLUMN_WIDTH ? MAX_COLUMNS_DENSE : MAX_COLUMNS;
+  return Math.max(MIN_COLUMNS, Math.min(cap, Math.floor(width / columnWidth)));
 }
 
 /**
@@ -63,10 +88,17 @@ export function deriveRowPitch(width: number, columns: number): number {
   return cardHeight + GAP_PX;
 }
 
-export function FilmGrid({ films, columns, generation = 0 }: FilmGridProps) {
+export function FilmGrid({
+  films,
+  columns,
+  generation = 0,
+  renderCard,
+  heightClass = 'h-[78vh]',
+  columnWidth = COLUMN_WIDTH,
+}: FilmGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [measuredWidth, setMeasuredWidth] = useState(DEFAULT_WIDTH);
-  const effectiveColumns = columns ?? deriveColumnCount(measuredWidth);
+  const effectiveColumns = columns ?? deriveColumnCount(measuredWidth, columnWidth);
   const rowPitch = deriveRowPitch(measuredWidth, effectiveColumns);
   const rowCount = Math.ceil(films.length / effectiveColumns);
   const [entering, setEntering] = useState(true);
@@ -106,7 +138,7 @@ export function FilmGrid({ films, columns, generation = 0 }: FilmGridProps) {
   });
 
   return (
-    <div ref={scrollRef} className="h-[78vh] overflow-y-auto">
+    <div ref={scrollRef} className={`${heightClass} overflow-y-auto`}>
       <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
         {virtualizer.getVirtualItems().map((row) => (
           <div
@@ -126,7 +158,7 @@ export function FilmGrid({ films, columns, generation = 0 }: FilmGridProps) {
                   className="motion-safe:transition-all motion-safe:duration-500 motion-safe:data-[entering=true]:translate-y-2 motion-safe:data-[entering=true]:opacity-0"
                   style={{ transitionDelay: `${Math.min(index * 25, 200)}ms` }}
                 >
-                  <FilmCard film={film} />
+                  {renderCard ? renderCard(film) : <FilmCard film={film} />}
                 </div>
               ))}
           </div>

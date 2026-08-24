@@ -22,7 +22,12 @@ export default defineConfig({
         test: {
           name: 'core',
           environment: 'node',
-          include: ['tests/domain/**/*.test.ts', 'tests/parsers/**/*.test.ts', 'src/**/*.test.ts'],
+          include: [
+            'tests/domain/**/*.test.ts',
+            'tests/parsers/**/*.test.ts',
+            'tests/styles/**/*.test.ts',
+            'src/**/*.test.ts',
+          ],
         },
       },
       {
