@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ExportButton } from '@/ui/board/ExportButton';
+import { renderBoardPng } from '@/ui/board/exportPng';
 import { createBoard, moveFilm } from '@/domain/tiers';
 import type { Film } from '@/domain/film';
 
@@ -25,6 +27,18 @@ const film: Film = {
   source: 'imdb',
 };
 
+vi.mock('@/ui/board/exportPng', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/ui/board/exportPng')>()),
+  // The only part that needs a canvas. Everything around it — when the button
+  // offers itself, and what it says when the answer is no file — is the part
+  // worth asserting here, and it is unreachable without this.
+  renderBoardPng: vi.fn(),
+}));
+
+beforeEach(() => {
+  vi.mocked(renderBoardPng).mockReset();
+});
+
 // The rendering itself needs a 2D canvas context, which jsdom does not have,
 // so what is worth asserting here is when the button offers itself at all.
 describe('ExportButton', () => {
@@ -37,6 +51,28 @@ describe('ExportButton', () => {
     const board = moveFilm(createBoard('b', 'x'), 'a', { tierId: 'S', index: 0 });
     render(<ExportButton board={board} films={[film]} />);
     expect(screen.getByRole('button', { name: 'Save as PNG' })).toBeEnabled();
+  });
+
+  it('says so when the browser will not give up the bytes', async () => {
+    // `toBlob` reports an over-large canvas by handing back null rather than
+    // by throwing, which reaches a user as a button that did nothing.
+    vi.mocked(renderBoardPng).mockResolvedValue(null);
+    const board = moveFilm(createBoard('b', 'x'), 'a', { tierId: 'S', index: 0 });
+    render(<ExportButton board={board} films={[film]} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save as PNG' }));
+
+    expect(await screen.findByText('The image could not be created.')).toBeInTheDocument();
+  });
+
+  it('says so when rendering throws rather than returning nothing', async () => {
+    vi.mocked(renderBoardPng).mockRejectedValue(new Error('no fonts'));
+    const board = moveFilm(createBoard('b', 'x'), 'a', { tierId: 'S', index: 0 });
+    render(<ExportButton board={board} films={[film]} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save as PNG' }));
+
+    expect(await screen.findByText('The image could not be created.')).toBeInTheDocument();
   });
 
   it('says nothing until something has gone wrong', () => {

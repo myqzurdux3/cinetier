@@ -248,26 +248,9 @@ describe('readPalette', () => {
 });
 
 describe('pngFilename', () => {
-  it('slugifies the board name', () => {
-    expect(pngFilename('My ranking')).toBe('cinetier-my-ranking.png');
-  });
-
-  it('strips accents rather than leaving them out', () => {
-    // "Chefs-d'oeuvre" should not become "chefs-d-uvre".
-    expect(pngFilename('Chefs-d\u2019œuvre été')).toBe('cinetier-chefs-d-uvre-ete.png');
-  });
-
-  it('drops the characters a file system refuses', () => {
-    expect(pngFilename('Best / worst: 2024?')).toBe('cinetier-best-worst-2024.png');
-  });
-
-  it('falls back rather than producing a name that is only an extension', () => {
-    // A board called "???" would otherwise download as ".png".
-    expect(pngFilename('???')).toBe('cinetier-tier-list.png');
-    expect(pngFilename('')).toBe('cinetier-tier-list.png');
-  });
-
-  it('does not leave a trailing dash from a trimmed name', () => {
-    expect(pngFilename('Films! ')).toBe('cinetier-films.png');
+  it('is the shared board file name with a png extension', () => {
+    // The rule itself lives in domain/filename.ts and is tested there; what
+    // this pins is that the two things a board saves as agree on it.
+    expect(pngFilename('Best of the 90s')).toBe('cinetier-best-of-the-90s.png');
   });
 });

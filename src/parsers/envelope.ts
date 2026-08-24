@@ -2,6 +2,7 @@ import type { Film, FilmSource } from '@/domain/film';
 import { RATING_SCALES, type RatingScale } from '@/domain/rating';
 import { TITLE_TYPES, type TitleType } from '@/domain/titleType';
 import { TIER_COLORS, type Tier, type TierBoard, type TierColor } from '@/domain/tiers';
+import { boardFilename } from '@/domain/filename';
 import { ParseError } from './types';
 
 /**
@@ -26,18 +27,9 @@ interface Envelope {
   films: Film[];
 }
 
-/**
- * A file name for a board's `.json`, matching its image's.
- */
+/** A board's `.json`, named to match the image beside it. */
 export function envelopeFilename(boardName: string): string {
-  const slug = boardName
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
-  return `cinetier-${slug === '' ? 'tier-list' : slug}.json`;
+  return boardFilename(boardName, 'json');
 }
 
 /** The text of a `.json` file carrying `films` and `board`. */

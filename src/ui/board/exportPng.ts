@@ -4,6 +4,7 @@ import type { Film } from '@/domain/film';
 import type { TierBoard } from '@/domain/tiers';
 import type { TierColor } from '@/domain/tiers';
 import { TIER_COLORS } from '@/domain/tiers';
+import { boardFilename } from '@/domain/filename';
 
 /**
  * The colours and faces an export is drawn in, read from the page rather than
@@ -300,23 +301,9 @@ function loadImage(url: string): Promise<CanvasImageSource | null> {
   });
 }
 
-/**
- * A file name for a board, safe on every platform and recognisable in a
- * downloads folder.
- *
- * Windows rejects \ / : * ? " < > | outright, and a name that reduces to
- * nothing — a board called "???" — has to fall back to something rather than
- * produce a file called ".png".
- */
+/** A board's PNG, named to match the `.json` beside it. */
 export function pngFilename(boardName: string): string {
-  const slug = boardName
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
-  return `cinetier-${slug === '' ? 'tier-list' : slug}.png`;
+  return boardFilename(boardName, 'png');
 }
 
 /**

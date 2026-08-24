@@ -179,6 +179,40 @@ beforeEach(() => {
     .mockImplementation(() => `z-new-${String((made += 1))}`);
 });
 
+describe('App enrichment', () => {
+  it('shows the library before enrichment has resolved anything', async () => {
+    // The property the whole enrichment architecture exists to provide: the
+    // parse is instant, the TMDB fill-in is not, and a screen that waits for
+    // the second is a screen that looks broken for as long as the network
+    // takes. It had rested on browser checks alone.
+    const never = deferred<Film[]>();
+    vi.mocked(enrichLibrary).mockReturnValue(never.promise);
+    render(<App />);
+
+    await importFixture();
+
+    // The board, the pool and a film out of the fixture are all on screen with
+    // enrichment still in flight.
+    expect(await screen.findByRole('region', { name: 'Pool' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: /^S — 0 films$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /import a different export/i })).toBeInTheDocument();
+    expect(enrichLibrary).toHaveBeenCalled();
+  });
+
+  it('does not save the library it has not finished enriching', async () => {
+    // Saving the un-enriched films would persist a library with no posters and
+    // no details, and the next visit would restore exactly that.
+    const never = deferred<Film[]>();
+    vi.mocked(enrichLibrary).mockReturnValue(never.promise);
+    render(<App />);
+
+    await importFixture();
+
+    await waitFor(() => expect(enrichLibrary).toHaveBeenCalled());
+    expect(saveLibrary).not.toHaveBeenCalled();
+  });
+});
+
 describe('App named boards', () => {
   const library = [film('a', { title: 'Heat' }), film('b', { title: 'Dune' })];
 
@@ -332,6 +366,31 @@ describe('App persistence', () => {
     // assertion at different points in this file's life. Only the header's own
     // span reads exactly "2 films".
     expect(screen.getByText('2 films', { selector: 'span' })).toBeInTheDocument();
+  });
+
+  it('saves a restored board, which is what releases the save guard', async () => {
+    // The debounced save is suppressed until the board restore settles, and
+    // released in a `.finally()`. Restoring a board is the one path that
+    // changes the board without going through `dispatch`, so it is the only
+    // thing that can show the release happening: without it the restored board
+    // is never written back, and the guard stays shut for the rest of the
+    // session.
+    //
+    // The other half of that `.finally()` — releasing when there was no board
+    // to restore — has no test, and a written one was deleted rather than
+    // shipped. Every path that changes the board without a restore (`dispatch`,
+    // and switching boards) sets the guard itself, so nothing can distinguish
+    // the release firing from the release being unnecessary.
+    const restored = moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 });
+    vi.mocked(loadLibrary).mockResolvedValue([film('a')]);
+    vi.mocked(loadCurrentBoard).mockResolvedValue(restored);
+
+    render(<App />);
+    await screen.findByRole('button', { name: /import a different export/i });
+
+    await waitFor(() => {
+      expect(saveBoard).toHaveBeenCalledWith(restored);
+    });
   });
 
   it('saves the enriched library only after enrichment settles, not before', async () => {
