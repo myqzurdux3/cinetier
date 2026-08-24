@@ -275,7 +275,17 @@ effects and their writers, not the render tree.
   kept the saved filter criteria, and added the `boards` store. Three defects came out of
   it and are fixed on this branch: the tier palette never reaching the browser, the pool
   taking 78vh so no row was ever on screen with it, and `closestCenter` dropping a film
-  into whichever row's centre was nearest rather than the one under the cursor.
+  into whichever row's centre was nearest rather than the one under the cursor. Three more
+  came out of re-running the pass against each fix: an empty pool collapsing to a
+  sixty-pixel strip that could not be hit, a card scrolled out of view in the virtualised
+  pool winning drops aimed at the row behind it, and dnd-kit auto-scrolling the pool's own
+  grid until it unmounted the card being dragged.
+
+  The pass ran through Playwright's own Chromium rather than the extension, and the scripts
+  are throwaway — they live in the session scratchpad, not in the repository. Turning the
+  useful ones into a checked-in end-to-end suite is the obvious next step and has not been
+  taken: every defect above is now covered by a unit test of the rule it broke, but nothing
+  in `npm run test:run` drives a real pointer.
 
   Still not done by a person: listening to an actual screen reader. What was checked is the
   text of the live region at each step, which is what a screen reader would read, not the
