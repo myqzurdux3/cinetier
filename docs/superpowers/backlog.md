@@ -249,6 +249,14 @@ effects and their writers, not the render tree.
 
 ## Testing and tooling
 
+- **Nothing in the checked-in suite drives a real browser.** Every defect the manual passes
+  found is now covered by a unit test of the rule it broke, and an axe run over four screens
+  at two widths in both themes reports no violations — but all of that was driven from
+  throwaway scripts in a session scratchpad. An end-to-end suite that a `npm run` command
+  could execute, using Playwright's own Chromium (already cached on this machine), is the
+  obvious next investment: real pointer events are the only way most of these defects were
+  ever reachable.
+
 - ~~**The tier board's manual verification gate is entirely outstanding.**~~ Closed on
   2026-08-24. The Chrome extension was still not connected, so the pass ran through a real
   Chromium driven by Playwright from the scratchpad instead — a genuine browser with real

@@ -750,6 +750,20 @@ describe('App board', () => {
     expect(undoButton).toBeDisabled();
   });
 
+  it('gives the library screen a level-one heading of its own', async () => {
+    // The landing page has one and it is gone by the time this renders; the
+    // wordmark in the shell is a span, not a heading. Without this the whole
+    // application, once a library is loaded, is a document whose heading list
+    // starts at level two — which is what axe reported.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a')]);
+    render(<App />);
+
+    await screen.findByRole('button', { name: /import a different export/i });
+    const headings = screen.getAllByRole('heading', { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveTextContent(/your library/i);
+  });
+
   it('does not let a board edit throw away a slow filters restore', async () => {
     // The board's "an edit wins over a restore" guard used to be the same ref
     // the filters restore reads, so a first drag landing before a slow
