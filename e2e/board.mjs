@@ -16,6 +16,7 @@ import {
   poolCard,
   ratingsCsv,
   rowCard,
+  labelBlocks,
   rowList,
   rows,
 } from './harness.mjs';
@@ -317,9 +318,7 @@ check('every tier colour reaches the browser', async (page) => {
   // one, and every reference to these is composed at runtime. Five of the six
   // were dropped from the stylesheet, and the sixth survived on a doc comment.
   await importLibrary(page);
-  const backgrounds = await page.evaluate(() =>
-    [...document.querySelectorAll('.w-14')].map((n) => getComputedStyle(n).backgroundColor),
-  );
+  const backgrounds = (await labelBlocks(page)).map((block) => block?.background ?? 'none');
   if (backgrounds.length !== 6)
     throw new Error(`expected six row labels, saw ${backgrounds.length}`);
   const transparent = backgrounds.filter((colour) => /rgba\(0, 0, 0, 0\)|transparent/.test(colour));
@@ -657,6 +656,42 @@ check(
   },
   { width: 900, height: 800 },
 );
+
+check('a long row name is centred and stays inside its block', async (page) => {
+  // The block is sized for the letters S through F. A name of any length has
+  // to fit the same column: `justify-center` centres the block's line box and
+  // does nothing about the lines inside it once a label wraps, so a long name
+  // came out ragged-left — and an unbroken word ran sixty-one pixels past the
+  // colour, over the row beside it.
+  await importLibrary(page);
+  await page.getByRole('button', { name: 'Edit rows' }).click();
+  await page.waitForTimeout(300);
+
+  const names = ['Chefs-d’œuvre absolus', 'AAAAAAAAAAAAAAAAAAAA'];
+  const inputs = page.locator('input[id$="-label"]');
+  for (const [index, name] of names.entries()) {
+    await inputs.nth(index).fill('');
+    await inputs.nth(index).type(name, { delay: 5 });
+  }
+  await page.getByRole('button', { name: 'Done editing rows' }).click();
+  await page.waitForTimeout(400);
+
+  const blocks = (await labelBlocks(page)).filter(Boolean);
+  if (blocks.length !== 6)
+    throw new Error(`expected six row blocks, found ${String(blocks.length)}`);
+
+  for (const name of names) {
+    const block = blocks.find((candidate) => candidate.text === name);
+    if (!block) throw new Error(`no row block reads "${name}": ${JSON.stringify(blocks)}`);
+    if (block.align !== 'center') throw new Error(`"${name}" is aligned ${block.align}`);
+    if (block.overflow > 0)
+      throw new Error(`"${name}" overflows its block by ${String(block.overflow)}px`);
+  }
+
+  // And the default letters keep the size the column is shaped for.
+  const letter = blocks.find((candidate) => candidate.text === 'C');
+  if (!letter) throw new Error('the untouched rows lost their letters');
+});
 
 let failed = 0;
 for (const { name, run, viewport } of checks) {

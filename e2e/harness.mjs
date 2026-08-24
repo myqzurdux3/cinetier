@@ -161,6 +161,35 @@ export const rowCard = (page, label, title) =>
     .filter({ hasText: new RegExp(`^${title}$`) })
     .first();
 
+/**
+ * The coloured block at the left of each row: its text, its colour, and
+ * whether what it holds fits.
+ *
+ * Found through the row's own list rather than by a width class. The block's
+ * width is a layout choice that has already changed once, and a check that
+ * goes green because its selector found nothing is worse than no check —
+ * which is exactly what happened.
+ */
+export const labelBlocks = (page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('ul[aria-label]')]
+      .filter((list) => /\d+ films?$/.test(list.getAttribute('aria-label') ?? ''))
+      .map((list) => {
+        // TierRow: a flex row of [the coloured block, a column holding the
+        // controls and this list]. SortableContext renders no element of its
+        // own, so the list's parent is that column.
+        const block = list.parentElement?.previousElementSibling;
+        if (!block) return null;
+        const style = getComputedStyle(block);
+        return {
+          text: block.textContent.trim(),
+          background: style.backgroundColor,
+          align: style.textAlign,
+          overflow: Math.round(block.scrollWidth - block.clientWidth),
+        };
+      }),
+  );
+
 /** What dnd-kit last announced, which is what a screen reader would have said. */
 export const announcement = (page) =>
   page.evaluate(
