@@ -1,4 +1,4 @@
-import type { CollisionDetection } from '@dnd-kit/core';
+import type { Collision, CollisionDetection } from '@dnd-kit/core';
 
 /**
  * Ask `within` first, and fall back to `fallback` only when it finds nothing.
@@ -23,6 +23,30 @@ export function preferPointer(
 ): CollisionDetection {
   return (args) => {
     const hits = within(args);
-    return hits.length > 0 ? hits : fallback(args);
+    return hits.length > 0 ? topmost(hits) : fallback(args);
   };
+}
+
+/** The droppable id of the pool, shared with the `useDroppable` that claims it. */
+export const POOL_ID = 'pool';
+
+/**
+ * Collapse a set of pointer hits to the one the person can actually see.
+ *
+ * `pointerWithin` returns every droppable whose rectangle contains the
+ * pointer and orders them by distance to each rectangle's centre. That order
+ * is wrong wherever two droppables overlap and one is painted over the other,
+ * which is exactly the pool: it is pinned to the bottom of the viewport and
+ * sits on top of whatever tier row happens to be behind it. A row holding
+ * twenty-four films is tall, its centre is nearer the pointer than the pool's
+ * is, and a film dropped squarely inside the visible pool went into that row.
+ *
+ * Anywhere inside the pool means the pool. There is no position to aim at
+ * within it — the pool is a set, not an order — so the pool's own cards being
+ * in the list changes nothing, and dropping onto one of them already resolved
+ * to the pool.
+ */
+function topmost(hits: Collision[]): Collision[] {
+  const pool = hits.find((hit) => hit.id === POOL_ID);
+  return pool ? [pool] : hits;
 }

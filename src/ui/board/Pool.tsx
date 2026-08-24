@@ -3,6 +3,7 @@ import { useDroppable } from '@dnd-kit/core';
 import type { Film } from '@/domain/film';
 import { FilmGrid } from '@/ui/library/FilmGrid';
 import { BoardCard } from './BoardCard';
+import { POOL_ID } from './collision';
 
 interface PoolProps {
   /** Already narrowed by the rail and by `search`; the pool renders what it is given. */
@@ -13,7 +14,7 @@ interface PoolProps {
 
 export function Pool({ films, search, onSearchChange }: PoolProps) {
   const searchId = useId();
-  const { setNodeRef, isOver } = useDroppable({ id: 'pool', data: { type: 'pool' } });
+  const { setNodeRef, isOver } = useDroppable({ id: POOL_ID, data: { type: 'pool' } });
 
   return (
     <section
@@ -42,7 +43,12 @@ export function Pool({ films, search, onSearchChange }: PoolProps) {
       </div>
 
       {films.length === 0 ? (
-        <p className="p-4 text-center text-sm text-ink-dim">
+        // The same height as the grid it stands in for. An empty pool is
+        // exactly when this text asks to be dropped into, and as a bare line
+        // of prose it was a sixty-pixel strip at the bottom of the screen —
+        // aiming a card at it missed by two pixels and the film landed in the
+        // tier row behind instead.
+        <p className="flex h-[24dvh] min-h-32 items-center justify-center p-4 text-center text-sm text-ink-dim">
           {search === ''
             ? 'Every film is placed. Drag one back here to unrank it.'
             : 'No film in the pool matches that search.'}
