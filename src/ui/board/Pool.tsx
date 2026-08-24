@@ -33,10 +33,6 @@ export function Pool({ films, search, onSearchChange, notice }: PoolProps) {
     <section
       ref={setNodeRef}
       aria-label="Pool"
-      // Read by `mayAutoScroll`, which needs to recognise this region's own
-      // scroll container from the outside — dnd-kit hands it the element, not
-      // a name for it.
-      data-pool="true"
       className={`shrink-0 space-y-2 rounded-card border p-2 ${isOver ? 'border-accent' : 'border-line'}`}
     >
       {/*
