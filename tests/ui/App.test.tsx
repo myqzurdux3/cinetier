@@ -775,6 +775,57 @@ describe('App board', () => {
     expect(rowS).toHaveValue('Sx');
   });
 
+  it('does not let a null-key edit be swallowed into the next rename of the same row', async () => {
+    // coalesceKey returns null for an action that stands on its own (here,
+    // "send everything back to the pool" — clearToPool). The dispatch guard
+    // is supposed to clear lastEdit on that branch so a *later* rename of the
+    // same row cannot mistake it for a continuation of the rename that came
+    // before it. Reached via clearToPool rather than a real drag: dnd-kit's
+    // sensors read getBoundingClientRect, which jsdom always reports as all
+    // zeros, so no drag can be driven here (see the two tests this branch
+    // already deleted for exactly that reason) — but clearToPool dispatches
+    // with the same null coalesceKey as `move` and runs through the identical
+    // guard in App's dispatch, so it exercises the code path this test is
+    // about just as well.
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
+    vi.mocked(loadFirstBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
+    );
+    render(<App />);
+
+    const row = await screen.findByRole('list', { name: /^S — 1 film$/ });
+    expect(row).toHaveTextContent('Heat');
+
+    // First edit to row S: its own undo entry.
+    const rowS = await screen.findByLabelText('Row S label');
+    await userEvent.type(rowS, 'uper');
+    expect(rowS).toHaveValue('Super');
+
+    // A null-key action that actually changes the board, in between the two
+    // renames. It only clears the row it names back to the pool if something
+    // is placed there, which is why the board above was restored with "Heat"
+    // already in S — clearToPool on an empty board is a no-op and wouldn't
+    // exercise the branch under test at all.
+    await userEvent.click(
+      screen.getByRole('button', { name: /send everything back to the pool/i }),
+    );
+    expect(screen.getByRole('region', { name: 'Pool' })).toHaveTextContent('Heat');
+
+    // Second edit to row S: must be its own undo entry too, not folded into
+    // the first rename just because they share a coalesce key.
+    await userEvent.type(rowS, 'duper');
+    expect(rowS).toHaveValue('Superduper');
+
+    // One Undo must return only the second rename — leaving both the first
+    // rename and the clearToPool in place. If lastEdit were not cleared by
+    // the null-key action, this Undo would instead squash the second rename
+    // into the clearToPool entry, silently discarding it as an undo step and
+    // restoring "Heat" to row S a click early.
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(rowS).toHaveValue('Super');
+    expect(screen.getByRole('region', { name: 'Pool' })).toHaveTextContent('Heat');
+  });
+
   it('asks before starting over, and names the board', async () => {
     vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat' })]);
     render(<App />);

@@ -100,7 +100,15 @@ describe('boardReducer', () => {
       { type: 'removeTier', tierId: 'nope' },
       { type: 'moveTier', tierId: 'nope', toIndex: 0 },
     ] as const) {
-      expect(boardReducer(board(), action)).toEqual(board());
+      // toBe, not toEqual, against the very same input reference (not a fresh
+      // board() call): these branches deliberately hand back the board they
+      // were given (see the "hands back the very same board" test below) so
+      // that App's undo history can skip recording a no-op edit. toEqual
+      // would pass just as happily against `return { ...board }` —
+      // value-equal, reference-distinct — which would silently push an
+      // identical board onto the undo stack.
+      const input = board();
+      expect(boardReducer(input, action)).toBe(input);
     }
   });
 
