@@ -88,6 +88,15 @@ effects and their writers, not the render tree.
 
 ## Robustness
 
+- **The coalescing guard's StrictMode clause cannot be tested, and may be dead.** `App.tsx`'s
+  history coalescing guards on `base !== current`, which exists so that React's development
+  double-invocation cannot make the second pass coalesce into the entry the first pass just
+  recorded. Removing that clause turns no test red. The reason was traced into React 19's own
+  dispatch path: its eager-state computation means no DOM-driven interaction this app can
+  produce makes the canary call's result observable. So the clause is either genuinely dead
+  or it protects a path nothing here can reach — and a test for it was written, mutated,
+  found unfalsifiable, and deleted rather than shipped. Worth settling deliberately: either
+  prove it necessary, or remove it and say why.
 - **First to triage: a board edit can silently cancel a pending filters restore.**
   `restoreCancelled` is one ref shared by the library, filters and board restores. Drag a
   card — or dispatch any board edit — before `loadFilters()` resolves, and the saved filter
