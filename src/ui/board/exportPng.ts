@@ -283,7 +283,7 @@ export async function loadPosters(
 }
 
 /** Fetch one image, or null if it does not load. */
-export function loadImage(url: string): Promise<CanvasImageSource | null> {
+function loadImage(url: string): Promise<CanvasImageSource | null> {
   return new Promise((resolve) => {
     const image = new Image();
     image.crossOrigin = 'anonymous';
@@ -324,7 +324,7 @@ export function pngFilename(boardName: string): string {
  * null — not by throwing. `fitCardWidth` shrinks the cards until the board
  * fits inside this, so the failure never happens rather than being reported.
  */
-export const MAX_EXPORT_HEIGHT = 7000;
+const MAX_EXPORT_HEIGHT = 7000;
 
 /**
  * Drawn at twice the layout's size.

@@ -1,9 +1,20 @@
 import type { Film } from '@/domain/film';
 import { mergeLibraries } from '@/domain/dedupe';
-import { parseImdbRatings } from '@/parsers/imdb';
-import { parseLetterboxdExport, type LetterboxdFiles } from '@/parsers/letterboxd';
-import { readLetterboxdArchive } from '@/parsers/archive';
+import type { LetterboxdFiles } from '@/parsers/letterboxd';
 import { ParseError } from '@/parsers/types';
+
+/*
+ * The parsers are loaded when a file is actually dropped, not when the page
+ * is. Between them they pull in a CSV parser and a ZIP reader — roughly a
+ * third of what the bundle used to weigh — and neither is needed to draw the
+ * screen that asks for a file, nor ever again once a library is restored from
+ * the browser's own database. `@/parsers/types` stays a static import: it is
+ * types plus one small error class, with no dependencies of its own, and
+ * `ParseError` has to be nameable in a `catch` before any of this runs.
+ */
+const imdbParser = () => import('@/parsers/imdb');
+const letterboxdParser = () => import('@/parsers/letterboxd');
+const archiveReader = () => import('@/parsers/archive');
 
 export type ImportOutcome =
   | { status: 'ok'; films: Film[]; warnings: string[]; skipped: number }
@@ -47,6 +58,7 @@ export async function importFiles(files: File[]): Promise<ImportOutcome> {
   try {
     for (const file of files) {
       if (file.name.toLowerCase().endsWith('.zip')) {
+        const { readLetterboxdArchive } = await archiveReader();
         Object.assign(letterboxd, await readLetterboxdArchive(file));
         continue;
       }
@@ -56,6 +68,7 @@ export async function importFiles(files: File[]): Promise<ImportOutcome> {
       const header = newline === -1 ? text : text.slice(0, newline);
 
       if (looksLikeImdb(header)) {
+        const { parseImdbRatings } = await imdbParser();
         const result = parseImdbRatings(text);
         libraries.push(result.films);
         warnings.push(...result.warnings);
@@ -77,6 +90,7 @@ export async function importFiles(files: File[]): Promise<ImportOutcome> {
     }
 
     if (letterboxd.diary || letterboxd.ratings || letterboxd.watched) {
+      const { parseLetterboxdExport } = await letterboxdParser();
       const result = parseLetterboxdExport(letterboxd);
       libraries.push(result.films);
       warnings.push(...result.warnings);
