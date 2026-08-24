@@ -101,7 +101,13 @@ export default function App() {
     // would otherwise clobber the edit and discard its undo stack via
     // initHistory, and over the "nothing to save yet" guard on the debounced
     // save below (`boardReady`), so the edit is not silently dropped.
-    restoreCancelled.current = true;
+    //
+    // A ref of its own, not the shared `restoreCancelled`. That one means
+    // "the user replaced or discarded the library", and the filters restore
+    // reads it too — so setting it from here let a first drag that happened to
+    // land before a slow filters read silently throw away the criteria the
+    // user had saved.
+    boardEdited.current = true;
     boardReady.current = true;
     setHistory((current) => {
       const next = boardReducer(current.present, action);
@@ -137,6 +143,14 @@ export default function App() {
   // library in between. A ref set synchronously by the actions that should
   // pre-empt the restore is the only thing immune to that.
   const restoreCancelled = useRef(false);
+
+  /**
+   * Set by any board edit, and read only by the board restore below. Separate
+   * from `restoreCancelled` because they answer different questions: that one
+   * is about the library the user is working on, this one is about whether the
+   * board on screen is still the one that was loaded.
+   */
+  const boardEdited = useRef(false);
 
   // The same idea one step further, for enrichment. An enrichment run outlives
   // the screen that started it — it reports per resolved film for seconds or
@@ -176,7 +190,9 @@ export default function App() {
   useEffect(() => {
     loadFirstBoard()
       .then((restored) => {
-        if (restored && !restoreCancelled.current) setHistory(initHistory(restored));
+        if (restored && !restoreCancelled.current && !boardEdited.current) {
+          setHistory(initHistory(restored));
+        }
       })
       .catch((error: unknown) => {
         console.error('Failed to restore the saved board', error);

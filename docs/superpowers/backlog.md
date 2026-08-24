@@ -107,15 +107,12 @@ effects and their writers, not the render tree.
   or it protects a path nothing here can reach — and a test for it was written, mutated,
   found unfalsifiable, and deleted rather than shipped. Worth settling deliberately: either
   prove it necessary, or remove it and say why.
-- **First to triage: a board edit can silently cancel a pending filters restore.**
-  `restoreCancelled` is one ref shared by the library, filters and board restores. Drag a
-  card — or dispatch any board edit — before `loadFilters()` resolves, and the saved filter
-  criteria are discarded without restoring: `setCriteria(restored)` never runs. Narrow
-  (a specific race), recoverable (the user still has the library and the board; only the
-  remembered filter criteria are lost), and untested. The clean fix is a separate ref for
-  the board restore. It was introduced deliberately during a fix round in this plan, and its
-  cost was accepted knowingly — but of everything this plan deferred, this is the one to
-  pick up first.
+- ~~**First to triage: a board edit can silently cancel a pending filters restore.**~~
+  Closed on 2026-08-24 with the separate ref the entry named. `boardEdited` is set by any
+  board edit and read only by the board restore; `restoreCancelled` keeps its own meaning —
+  the user replaced or discarded the library — and stays shared by the library and filters
+  restores. A test drives the race directly: a slow `loadFilters()`, a real board edit
+  before it resolves, and the criteria still apply afterwards.
 - **A rejected enrichment leaves the progress counter on screen.** It logs, and the reset
   button is always reachable, so nobody is trapped — but the interface says it is still
   working when it has stopped.

@@ -750,6 +750,32 @@ describe('App board', () => {
     expect(undoButton).toBeDisabled();
   });
 
+  it('does not let a board edit throw away a slow filters restore', async () => {
+    // The board's "an edit wins over a restore" guard used to be the same ref
+    // the filters restore reads, so a first drag landing before a slow
+    // IndexedDB read silently discarded the criteria the user had saved. The
+    // two answer different questions and now have a ref each.
+    const filtersDeferred = deferred<FilterCriteria | null>();
+    vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Heat', rating: 10 })]);
+    vi.mocked(loadFilters).mockReturnValue(filtersDeferred.promise);
+    vi.mocked(loadFirstBoard).mockResolvedValue(
+      moveFilm(createBoard('board-1', 'Mine'), 'a', { tierId: 'S', index: 0 }),
+    );
+
+    render(<App />);
+    await screen.findByRole('button', { name: /import a different export/i });
+
+    // A real board edit, before the filters have arrived.
+    await userEvent.click(
+      screen.getByRole('button', { name: /send everything back to the pool/i }),
+    );
+
+    filtersDeferred.resolve({ minRating: 90 });
+
+    // The criteria still apply: rating 10 is below 90, so nothing matches.
+    expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument();
+  });
+
   it("keeps a row's edit controls out of the way until they are asked for", async () => {
     // Five controls on every row is a hundred and eighty pixels of chrome
     // above a board that has to share a screen with its pool, and renaming a
