@@ -22,9 +22,40 @@ export function preferPointer(
   fallback: CollisionDetection,
 ): CollisionDetection {
   return (args) => {
-    const hits = within(args);
-    return hits.length > 0 ? topmost(hits) : fallback(args);
+    const hits = drawable(within(args));
+    return hits.length > 0 ? topmost(hits) : drawable(fallback(args));
   };
+}
+
+/**
+ * Drop every hit on a card that is sitting in the pool.
+ *
+ * Two reasons, and the second is a defect rather than a preference.
+ *
+ * The pool has no order — anywhere inside it means the same thing — so a
+ * position within it is not something anyone can aim at, and the pool's own
+ * droppable already covers being dropped into.
+ *
+ * And the pool's grid is virtualised inside a scroll container, which keeps a
+ * margin of rows mounted just outside the visible area. A mounted card that
+ * has been scrolled out of view still has a layout rectangle, and that
+ * rectangle sits wherever the absolute positioning puts it — for a pool
+ * scrolled towards its end, on top of the tier rows above it. dnd-kit
+ * hit-tests rectangles and knows nothing about clipping, so an invisible card
+ * was winning drops aimed at the row behind it and the film went quietly back
+ * to the pool. Measured on a 120-film pool scrolled to its last card.
+ *
+ * They stay registered as droppables, rather than becoming plain draggables,
+ * because `sortableKeyboardCoordinates` navigates between sortable items:
+ * unregistering them left an arrow key with nowhere to go and stranded every
+ * keyboard drag in the pool it started in.
+ */
+function drawable(hits: Collision[]): Collision[] {
+  return hits.filter((hit) => {
+    const data = hit.data?.droppableContainer.data.current as
+      { type?: string; tierId?: string | null } | undefined;
+    return !(data?.type === 'card' && data.tierId === null);
+  });
 }
 
 /** The droppable id of the pool, shared with the `useDroppable` that claims it. */

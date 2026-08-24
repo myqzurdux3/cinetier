@@ -7,6 +7,14 @@ import { preferPointer, POOL_ID } from '@/ui/board/collision';
 // pointerWithin returns nothing for a keyboard drag, and a board that stopped
 // choosing a destination under the arrow keys is the failure this guards.
 const hit = (id: string): Collision => ({ id });
+
+/** A hit on a card, carrying the `data` its `useSortable` registered. */
+const cardHit = (id: string, tierId: string | null): Collision => ({
+  id,
+  data: {
+    droppableContainer: { data: { current: { type: 'card', tierId, filmId: id } } },
+  } as unknown as Collision['data'],
+});
 const stub = (result: Collision[]): CollisionDetection => vi.fn(() => result);
 
 // The stubs above ignore their argument entirely, so an empty object stands in
@@ -31,6 +39,36 @@ describe('preferPointer', () => {
     const fallback = stub([hit('nearest')]);
     preferPointer(stub([hit('under-pointer')]), fallback)(ARGS);
     expect(fallback).not.toHaveBeenCalled();
+  });
+
+  it('ignores a card sitting in the pool', () => {
+    // The pool's grid is virtualised: a card scrolled out of view stays
+    // mounted, and its rectangle lands on top of the tier rows above it.
+    // dnd-kit hit-tests rectangles and knows nothing about clipping, so an
+    // invisible card was winning drops aimed at the row behind it.
+    const hits = [cardHit('imdb:tt1', null), hit('tier:f')];
+    expect(preferPointer(stub(hits), stub([hit('nearest')]))(ARGS)).toEqual([hit('tier:f')]);
+  });
+
+  it('keeps a card sitting in a row', () => {
+    // Rows are ordered, so a card in one is a real place to aim at.
+    const hits = [cardHit('imdb:tt1', 'S'), hit('tier:s')];
+    expect(preferPointer(stub(hits), stub([hit('nearest')]))(ARGS)).toEqual(hits);
+  });
+
+  it('ignores a pool card the fallback returns too', () => {
+    // closestCenter is just as blind to clipping as pointerWithin is.
+    expect(preferPointer(stub([]), stub([cardHit('imdb:tt1', null), hit('tier:f')]))(ARGS)).toEqual(
+      [hit('tier:f')],
+    );
+  });
+
+  it('falls back when the pointer only found pool cards', () => {
+    // Filtering can empty the list, and an empty list must mean "ask the
+    // fallback", not "nothing is under the pointer".
+    expect(preferPointer(stub([cardHit('imdb:tt1', null)]), stub([hit('nearest')]))(ARGS)).toEqual([
+      hit('nearest'),
+    ]);
   });
 
   it('answers with the pool alone when the pointer is inside it', () => {

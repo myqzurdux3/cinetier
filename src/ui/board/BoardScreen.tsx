@@ -21,6 +21,7 @@ import { TierRowControls } from './TierRowControls';
 import { Pool } from './Pool';
 import { destinationFor, type DropTarget } from './dropTarget';
 import { preferPointer } from './collision';
+import { mayAutoScroll } from './autoScroll';
 import { boardAnnouncements, type ItemDescription } from './announcements';
 
 interface BoardScreenProps {
@@ -114,6 +115,7 @@ export function BoardScreen({
       onDragCancel={() => {
         setActiveId(null);
       }}
+      autoScroll={{ canScroll: mayAutoScroll }}
       accessibility={{ announcements: boardAnnouncements(describe) }}
     >
       <div className="space-y-3">
