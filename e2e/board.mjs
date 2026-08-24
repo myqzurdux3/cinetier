@@ -595,8 +595,7 @@ check(
     // dnd-kit auto-scrolls the scroll ancestors of the dragged card, and that
     // container is one of them: scrolling it re-virtualises the grid, unmounts
     // the card being dragged, and the drag dies with no highlight and no drop.
-    // `mayAutoScroll` refuses that container for exactly this reason, and this
-    // is the only check that reaches the arrangement where it matters.
+    // This is the only check that reaches the arrangement where that matters.
     await importLibrary(page, ratingsCsv(manyFilms(120)));
     const scroller = page.locator('section[aria-label="Pool"] .overflow-y-auto');
     await scroller.evaluate((element) => {
@@ -609,13 +608,36 @@ check(
         .at(-1)
         ?.textContent.trim(),
     );
-    // The pool is below the rows here, so a row has to be brought into view
-    // with it; F is the one directly above.
     await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
     await page.waitForTimeout(300);
 
-    await drag(page, poolCard(page, last), rowList(page, 'F'));
-    eq((await rows(page)).F, [last], `after dragging ${last} out of a narrow pool`);
+    // Whichever row is on screen above the pool and clear of the band at the
+    // top of the window where dnd-kit auto-scrolls the page, rather than a row
+    // named here.
+    //
+    // Both halves are load-bearing. Which rows are in view on a narrow screen
+    // depends on font metrics and scrollbar widths, which differ between a
+    // laptop and a runner, so naming one passes in one place and fails in the
+    // other for reasons that have nothing to do with the defect. And aiming
+    // into the auto-scroll band moves the page under the aim: a row picked
+    // there was measured landing its film in the row above, which is dnd-kit
+    // doing exactly what it should and this check reading it as a failure.
+    const target = await page.evaluate(() => {
+      const pool = document.querySelector('section[aria-label="Pool"]').getBoundingClientRect();
+      for (const list of document.querySelectorAll('ul[aria-label]')) {
+        const label = list.getAttribute('aria-label');
+        if (!label || !/\d+ films?$/.test(label)) continue;
+        const box = list.getBoundingClientRect();
+        if (box.top > innerHeight * 0.3 && box.bottom < pool.top - 10) {
+          return label.split(' — ')[0];
+        }
+      }
+      return null;
+    });
+    if (!target) throw new Error('no tier row is reachable above the pool at this size');
+
+    await drag(page, poolCard(page, last), rowList(page, target));
+    eq((await rows(page))[target], [last], `after dragging ${last} into row ${target}`);
   },
   { width: 900, height: 800 },
 );
