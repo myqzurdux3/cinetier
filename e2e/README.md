@@ -46,4 +46,7 @@ one Playwright's pinned revision does not match.
 
 - A real screen reader. What is asserted is the text dnd-kit puts in the live
   region, which is what a screen reader would read, not the reading itself.
-- Touch. Every drag here is a mouse.
+- A real finger. Two checks drive touch, but through CDP's touch _events_;
+  Chrome does not turn those into a compositor pan, so what a swipe does to
+  the page is asserted through `touch-action` rather than by watching it
+  scroll.

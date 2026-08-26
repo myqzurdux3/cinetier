@@ -404,3 +404,31 @@ That plan deferred three things of its own:
   holds for the current hand-written path style. A future redraw of the
   logo, or one produced by a design tool that emits different path
   commands, can silently stop being checked by that test.
+
+## Closed on 2026-08-26, from a phone-sized browser
+
+The phone rendering had never actually been looked at in a browser — every
+earlier claim about it came from reasoning about the CSS. Driven at 390×844,
+the layout holds: nothing overflows horizontally, the grid falls to two
+columns, and every control is reachable.
+
+What that pass did find is that the board could not be used at all by finger.
+`PointerSensor` activated on the touch, the browser then claimed the same
+gesture as a page pan and cancelled the drag — "Moving Alpha was cancelled",
+every time, with the film back where it started. Closed by splitting the
+sensors: `MouseSensor` on distance for the mouse, `TouchSensor` on a 200ms
+hold for the finger. A press held still becomes a drag; a touch that moves at
+once stays a scroll, which is what keeps the pool — a wall of cards, with no
+gaps to swipe from — scrollable at all. That is also why the fix is not
+`touch-action: none` on the cards, and why a check now asserts that no card
+ancestor sets it.
+
+Still open, from the same pass:
+
+- **The board sits about 700px down a phone screen**, under the library
+  summary, the filter button, the board bar, the toolbar and the pre-fill
+  panel. Nothing is broken and nothing overflows, but a phone shows a lot of
+  chrome before the first row. The controls also wrap ragged — "Delete board"
+  and "Save as PNG" each land alone on a line.
+- **A pinch or a two-finger gesture is untested.** Both new checks drive a
+  single touch point.
