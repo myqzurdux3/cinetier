@@ -305,7 +305,11 @@ check('an over-tight filter empties the pool without taking the board away', asy
   // criterion too many read as "your ranking is gone".
   await importLibrary(page);
   await drag(page, poolCard(page, 'Alpha'), rowList(page, 'S'));
-  await page.getByLabel('Minimum rating').fill('101');
+  // A pair of bounds that cross, rather than a single out-of-range number:
+  // the rating fields clamp to 0-100 now, so 101 quietly becomes 100 and the
+  // pool stays full. Both of these are values the field accepts.
+  await page.getByLabel('Minimum rating').fill('90');
+  await page.getByLabel('Maximum rating').fill('10');
   await page.waitForTimeout(700);
 
   const explained = await page.locator('section[aria-label="Pool"]').innerText();
@@ -781,6 +785,30 @@ check(
   },
   { width: 390, height: 844 },
 );
+
+check('the filter sections take the accent ring when tabbed to', async (page) => {
+  // Every input and button in the rail carries `focus:ring-accent`; a closed
+  // section's summary is its only keyboard-operable part, and it was the one
+  // control still wearing the browser's own outline. Driven with Tab rather
+  // than `.focus()` because `:focus-visible` is the whole point.
+  await importLibrary(page);
+
+  let shadow = null;
+  for (let press = 0; press < 60 && shadow === null; press += 1) {
+    await page.keyboard.press('Tab');
+    shadow = await page.evaluate(() => {
+      const active = document.activeElement;
+      if (!active || active.tagName !== 'SUMMARY') return null;
+      if (!active.matches(':focus-visible')) return 'not focus-visible';
+      return getComputedStyle(active).boxShadow;
+    });
+  }
+
+  if (shadow === null) throw new Error('tabbing never reached a filter section');
+  if (shadow === 'none' || shadow === 'not focus-visible') {
+    throw new Error(`a focused filter section has no ring (box-shadow: ${shadow})`);
+  }
+});
 
 let failed = 0;
 for (const { name, run, viewport } of checks) {

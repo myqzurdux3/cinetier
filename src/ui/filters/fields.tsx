@@ -11,6 +11,21 @@ const INPUT =
   'w-24 rounded-card border border-line bg-surface-raised px-2 py-1 text-ink focus:outline-none focus:ring-2 focus:ring-accent';
 
 export function NumberField({ label, value, min, max, onChange }: NumberFieldProps) {
+  /**
+   * `min` and `max` on a number input are advisory: they mark the field
+   * invalid and stop the spinner, and do nothing at all about a typed digit.
+   * "Keep the top 0" was reachable that way, and it empties the pool.
+   *
+   * Clamping rather than rejecting keeps the box usable — every value a reader
+   * can type still lands somewhere sensible, and a bound they cannot type is
+   * one they were not allowed to set anyway.
+   */
+  function clamp(parsed: number): number {
+    if (min !== undefined && parsed < min) return min;
+    if (max !== undefined && parsed > max) return max;
+    return parsed;
+  }
+
   return (
     <label className={FIELD_ROW}>
       <span>{label}</span>
@@ -23,7 +38,15 @@ export function NumberField({ label, value, min, max, onChange }: NumberFieldPro
           const raw = event.target.value;
           // An empty box means "no bound". Number('') is 0, which would apply a
           // filter nobody asked for.
-          onChange(raw === '' ? undefined : Number(raw));
+          if (raw === '') {
+            onChange(undefined);
+            return;
+          }
+          // No NaN guard: a number input's `value` is '' for anything it
+          // cannot parse — a lone "-", an "e" — so `raw` here is either empty
+          // or a number. A guard was written for it, and could not be made to
+          // fail.
+          onChange(clamp(Number(raw)));
         }}
         className={INPUT}
       />
@@ -44,7 +67,7 @@ export function CheckField({ label, checked, onChange }: CheckFieldProps) {
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="accent-accent"
+        className="accent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       />
       <span>{label}</span>
     </label>

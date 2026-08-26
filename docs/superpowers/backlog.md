@@ -262,18 +262,16 @@ effects and their writers, not the render tree.
   them — the count and the placement agree with each other, just not with what the rail
   shows on screen. Deliberate: the rail filters the pool and only the pool. User-visible,
   and unverified by hand.
-- **`<summary>` and the checkboxes take the UA focus ring, not the accent token.** Every
-  input and button in the rail carries `focus:ring-accent`; the only keyboard-operable part
-  of a *closed* section does not. The specification asks for the accent ring on the section
-  itself.
-- **`GenreControls`, `EraControls` and `TypeControls` drop a selected-but-unavailable
-  option**, where `DirectorControls` deliberately keeps one on screen "so a filter can always
-  be undone from the control that set it". A restored criterion the library no longer holds
-  is a real case — `services/filters.ts` preserves it on purpose. In three of the four, the
-  chip is the only escape hatch; in the fourth, the control is too.
-- **`topN: 0` is reachable by typing.** `NumberField`'s `min={1}` is advisory only, and the
-  result is an empty grid. The zero-result screen names Top N as the culprit, so the user can
-  recover.
+- ~~**`<summary>` and the checkboxes take the UA focus ring, not the accent token.**~~ Closed
+  on 2026-08-26. An end-to-end check tabs to a section and reads the computed box-shadow,
+  since `:focus-visible` is the state under test and no unit test can produce it.
+- ~~**`GenreControls`, `EraControls` and `TypeControls` drop a selected-but-unavailable
+  option**~~ Closed on 2026-08-26: all four now union the chosen values into the options, so
+  a filter can always be undone from the control that set it.
+- ~~**`topN: 0` is reachable by typing.**~~ Closed on 2026-08-26: `NumberField` clamps to
+  its own bounds, which `min`/`max` on a number input never did. One end-to-end check had
+  been emptying the pool by typing 101 into a 0-100 field; it now crosses two valid bounds
+  instead.
 - **The README's privacy paragraph says TMDB receives "a title, year, or IMDb identifier"
   for the details request.** It actually receives a TMDB id. Derived from the same data, so
   not a false privacy claim, but not literally accurate either.
