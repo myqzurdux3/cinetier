@@ -30,6 +30,32 @@ function film(id: string, rating: number | null): Film {
 const films = [film('a', 90), film('b', null)];
 
 describe('LibrarySummary', () => {
+  it('announces the start and the end of enrichment, and nothing per film', () => {
+    // The visible counter used to be the live region itself, and it moves once
+    // per resolved film: a four-hundred-title import read four hundred
+    // announcements aloud, each interrupting the last.
+    const films = [film('a', 8), film('b', 7)];
+    const props = { films, warnings: [], skipped: 0, onReset: vi.fn() };
+    const { rerender } = render(<LibrarySummary {...props} enriching={null} />);
+
+    // Always in the document, so the browser has a region to watch before its
+    // text ever changes. One that appears already populated is not reliably
+    // announced at all.
+    const region = screen.getByRole('status');
+    expect(region.textContent).toBe('');
+
+    rerender(<LibrarySummary {...props} enriching={{ done: 0, total: 2 }} />);
+    expect(region.textContent).toMatch(/finding posters for 2 titles/i);
+
+    rerender(<LibrarySummary {...props} enriching={{ done: 1, total: 2 }} />);
+    // The visible counter moved; the announcement did not.
+    expect(screen.getByText(/finding posters… 1 of 2/i)).toBeInTheDocument();
+    expect(region.textContent).toMatch(/finding posters for 2 titles/i);
+
+    rerender(<LibrarySummary {...props} enriching={null} />);
+    expect(region.textContent).toMatch(/finished finding posters/i);
+  });
+
   it('counts the library and how much of it is rated', () => {
     render(
       <LibrarySummary films={films} skipped={0} warnings={[]} enriching={null} onReset={vi.fn()} />,
@@ -48,12 +74,14 @@ describe('LibrarySummary', () => {
         onReset={vi.fn()}
       />,
     );
-    expect(screen.getByText(/finding posters/i)).toBeInTheDocument();
+    // The visible counter specifically. The always-mounted live region beside
+    // it also says "finding posters", in words of its own.
+    expect(screen.getByText(/finding posters… 1 of 2/i)).toBeInTheDocument();
 
     rerender(
       <LibrarySummary films={films} skipped={0} warnings={[]} enriching={null} onReset={vi.fn()} />,
     );
-    expect(screen.queryByText(/finding posters/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/finding posters… /i)).not.toBeInTheDocument();
   });
 
   it('surfaces import warnings rather than hiding them', () => {

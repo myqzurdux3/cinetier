@@ -10,8 +10,6 @@ interface FilmGridProps {
    * measured width instead — that's what a real screen gets.
    */
   columns?: number;
-  /** Changes once per import. Playing the entrance again is what it means. */
-  generation?: number;
   /**
    * What to draw in a cell. Defaults to the library's own card; the board's
    * pool passes a draggable one. The grid owns layout and virtualisation and
@@ -91,7 +89,6 @@ export function deriveRowPitch(width: number, columns: number): number {
 export function FilmGrid({
   films,
   columns,
-  generation = 0,
   renderCard,
   heightClass = 'h-[78vh]',
   columnWidth = COLUMN_WIDTH,
@@ -103,13 +100,16 @@ export function FilmGrid({
   const rowCount = Math.ceil(films.length / effectiveColumns);
   const [entering, setEntering] = useState(true);
 
+  // Once, on mount. A `generation` prop used to let a caller replay this; the
+  // board replaced the library screen and nothing has passed it since, and a
+  // new import remounts the grid anyway, so it only ever meant "on mount"
+  // twice over.
   useEffect(() => {
-    setEntering(true);
     // One frame is enough to let the initial state paint; anything longer and
     // the reader sees the cards sitting in their pre-animation position.
     const id = requestAnimationFrame(() => setEntering(false));
     return () => cancelAnimationFrame(id);
-  }, [generation]);
+  }, []);
 
   useEffect(() => {
     // An explicit columns prop is an override, not a starting point: skip

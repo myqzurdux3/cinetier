@@ -76,9 +76,10 @@ remembered between visits, and neither one asks the network for a font.
 Your ratings never leave your browser. There is no server and no account.
 
 Your library, your filters and your board are stored locally, in the browser's
-own database. The only outbound requests go to TMDB, which receive a title, a
-year, or an IMDb identifier in order to fetch a poster and, afterwards, that
-film's genres, director and runtime. They never receive your ratings and never
+own database. The only outbound requests go to TMDB. Each one carries a title
+and a year, or an IMDb identifier, to fetch a poster; the request that follows
+it, for that film's genres, director and runtime, carries the TMDB identifier
+the first request came back with. They never receive your ratings and never
 receive your history.
 
 ## Getting your data

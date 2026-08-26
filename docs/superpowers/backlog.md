@@ -235,14 +235,17 @@ effects and their writers, not the render tree.
   place", so seven titles the user cannot see moved without a word. The panel's summary now
   states the count it will place, which helps; naming the set it draws from would help more.
 
-- **`LibrarySummary`'s progress is a conditionally mounted live region** — the pattern that
+- ~~**`LibrarySummary`'s progress is a conditionally mounted live region** — the pattern that
   was fixed in `DropZone` because screen readers frequently do not announce it. The naive
   fix is wrong here: a polite region over a per-film counter would announce hundreds of
-  times. Mount it always and announce only start and finish.
-- **The file input leaves the tab order while an import runs**, so keyboard focus is lost for
-  the duration.
-- **The screen-reader status duplicates the visible line verbatim**, so someone reading the
-  region afterwards meets the same sentence twice.
+  times. Mount it always and announce only start and finish.~~ Closed on 2026-08-26.
+- ~~**The file input leaves the tab order while an import runs**~~ Closed on 2026-08-26: the
+  input is still disabled for the read, but focus is handed to the region announcing it, so
+  it no longer falls to `<body>`. Checked end-to-end, since jsdom does not blur a disabled
+  element and cannot reproduce this at all.
+- ~~**The screen-reader status duplicates the visible line verbatim**~~ Closed on 2026-08-26
+  along with the entry above it: one always-mounted region, in words of its own, saying only
+  that the run started and that it finished.
 - ~~**Removing a criterion unmounts the focused button.** Focus falls to `<body>`; nothing
   moves it to a stable neighbour.~~ Closed by the filter-rail branch review's fix wave
   (2026-08-20): `FilterStatus`'s wrapper carries `tabIndex={-1}` and takes focus after a
@@ -254,9 +257,8 @@ effects and their writers, not the render tree.
   directly, or unmounts it when the filters admit nothing — the board replaced the library
   screen, and `FilmGrid`'s only caller now is `Pool`. See the next entry for what that leaves
   behind.
-- **`FilmGrid`'s `generation` prop is now dead in production.** Nothing passes it since the
-  board replaced the grid on the library screen; only its own test file exercises it. The
-  entrance replay it powered is redundant because a new import remounts the grid anyway.
+- ~~**`FilmGrid`'s `generation` prop is now dead in production.**~~ Removed on 2026-08-26.
+  The entrance now runs on mount, which is what it meant.
 - **`PrefillPanel` receives the unfiltered library, not the pool.** "Pre-fill from my
   ratings" can place titles the filter rail is currently hiding, and its preview counts
   them — the count and the placement agree with each other, just not with what the rail
@@ -272,9 +274,9 @@ effects and their writers, not the render tree.
   its own bounds, which `min`/`max` on a number input never did. One end-to-end check had
   been emptying the pool by typing 101 into a 0-100 field; it now crosses two valid bounds
   instead.
-- **The README's privacy paragraph says TMDB receives "a title, year, or IMDb identifier"
-  for the details request.** It actually receives a TMDB id. Derived from the same data, so
-  not a false privacy claim, but not literally accurate either.
+- ~~**The README's privacy paragraph says TMDB receives "a title, year, or IMDb identifier"
+  for the details request.**~~ Corrected on 2026-08-26: it names the TMDB identifier the
+  first request came back with.
 - **`filter-status` is a hardcoded document-global id**, now depended on across components so
   `NoResults` can move focus into `FilterStatus`. Fine while `App` renders exactly one of
   them; duplicate ids the moment it does not.

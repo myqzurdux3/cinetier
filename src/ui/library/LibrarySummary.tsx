@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { Film } from '@/domain/film';
 import { TITLE_TYPE_LABELS, type TitleType } from '@/domain/titleType';
 
@@ -32,6 +33,30 @@ export function LibrarySummary({
   onReset,
 }: LibrarySummaryProps) {
   const rated = films.filter((film) => film.rating !== null).length;
+
+  /**
+   * Start and finish, and nothing in between.
+   *
+   * The visible counter used to be the live region itself, and it moves once
+   * per resolved film: a four-hundred-title import read four hundred
+   * announcements aloud, each one interrupting the last. It is also mounted
+   * only while a run is in flight, and a live region that appears already
+   * populated is not reliably announced at all.
+   *
+   * So the region below is always in the document and says one of two things.
+   * The counter beside it stays visible and stops being live.
+   */
+  const [announcement, setAnnouncement] = useState('');
+  const running = useRef(false);
+  useEffect(() => {
+    if (enriching !== null && !running.current) {
+      running.current = true;
+      setAnnouncement(`Finding posters for ${String(enriching.total)} titles.`);
+    } else if (enriching === null && running.current) {
+      running.current = false;
+      setAnnouncement('Finished finding posters.');
+    }
+  }, [enriching]);
   // A library of nothing but films should say "films", not the vaguer "titles"
   // it needs as soon as series are in there too.
   const onlyFilms = films.every((film) => film.titleType === 'movie');
@@ -48,10 +73,13 @@ export function LibrarySummary({
       </p>
 
       {enriching && (
-        <p className="text-sm text-ink-dim" aria-live="polite">
+        <p className="text-sm text-ink-dim">
           Finding posters… {enriching.done} of {enriching.total}
         </p>
       )}
+      <p className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </p>
 
       <button
         type="button"

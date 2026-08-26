@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type DragEvent, type ChangeEvent } from 'react';
+import { useEffect, useId, useRef, useState, type DragEvent, type ChangeEvent } from 'react';
 import { importFiles, type ImportOutcome } from './importFiles';
 
 interface DropZoneProps {
@@ -7,6 +7,7 @@ interface DropZoneProps {
 
 export function DropZone({ onImported }: DropZoneProps) {
   const inputId = useId();
+  const statusRef = useRef<HTMLParagraphElement>(null);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ message: string; hint: string } | null>(null);
@@ -48,6 +49,18 @@ export function DropZone({ onImported }: DropZoneProps) {
     input.value = '';
   }
 
+  // The file input is disabled for the length of the read, and disabling the
+  // focused element blurs it — focus falls to <body>, which for a keyboard or
+  // screen-reader user means starting the page again to get back. It is handed
+  // to the region that is announcing the read instead.
+  //
+  // Guarded on <body> rather than on "was it the input": that is the condition
+  // that actually matters, it is the only one that can be observed after the
+  // fact, and it takes nothing away from a user who has focus somewhere else.
+  useEffect(() => {
+    if (busy && document.activeElement === document.body) statusRef.current?.focus();
+  }, [busy]);
+
   return (
     <div className="mx-auto max-w-xl">
       <div
@@ -68,7 +81,7 @@ export function DropZone({ onImported }: DropZoneProps) {
           An IMDb <code>.csv</code>, or a Letterboxd <code>.zip</code> exactly as you downloaded it
           — or a <code>.json</code> Cinetier saved — whatever the file is named.
         </p>
-        <p role="status" aria-live="polite" className="sr-only">
+        <p ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="sr-only">
           {busy ? 'Reading your export…' : ''}
         </p>
 
