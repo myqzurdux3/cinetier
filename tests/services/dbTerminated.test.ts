@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { silenceConsoleError } from '../support/console';
 
 // fake-indexeddb has no way to simulate the browser abnormally dropping a
 // connection — there is no real process to crash — so 'terminated' cannot be
@@ -19,7 +20,7 @@ describe('db() when the connection is terminated', () => {
   });
 
   it('logs it and forgets the memoised connection, so the next call reopens rather than reusing a dead one', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = silenceConsoleError();
     const firstHandle = { marker: 'first' };
     const secondHandle = { marker: 'second' };
     let callbacks: { terminated?: () => void } = {};
@@ -43,7 +44,5 @@ describe('db() when the connection is terminated', () => {
 
     expect(reopened).toBe(secondHandle);
     expect(openDBMock).toHaveBeenCalledTimes(2);
-
-    consoleError.mockRestore();
   });
 });

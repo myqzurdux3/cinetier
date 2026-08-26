@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { silenceConsoleError } from '../support/console';
 import 'fake-indexeddb/auto';
 import { openDB, type DBSchema } from 'idb';
 import { db, resetDatabase } from '@/services/db';
@@ -16,7 +17,7 @@ beforeEach(async () => {
 
 describe('a version bump blocked by a connection open elsewhere', () => {
   it('logs so the stall is not silent, and still resolves once the other connection closes', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = silenceConsoleError();
 
     // A v1 connection deliberately left open — standing in for a second tab
     // still on the old version. Real IndexedDB (and fake-indexeddb, which
@@ -45,7 +46,5 @@ describe('a version bump blocked by a connection open elsewhere', () => {
     v1.close();
     const opened = await opening;
     expect(opened.version).toBe(4);
-
-    consoleError.mockRestore();
   });
 });
