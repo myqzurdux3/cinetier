@@ -303,16 +303,22 @@ export default function App() {
     if (runId.current !== id) return;
 
     setFetchingDetails({ done: 0, total });
-    const detailed = await enrichDetails(library, (progress) => {
-      if (runId.current !== id) return;
-      setFilms(progress.films);
-      setFetchingDetails({ done: progress.done, total: progress.total });
-    });
+    try {
+      const detailed = await enrichDetails(library, (progress) => {
+        if (runId.current !== id) return;
+        setFilms(progress.films);
+        setFetchingDetails({ done: progress.done, total: progress.total });
+      });
 
-    if (runId.current !== id) return;
-    setFilms(detailed);
-    setFetchingDetails(null);
-    await saveLibrary(detailed);
+      if (runId.current !== id) return;
+      setFilms(detailed);
+      setFetchingDetails(null);
+      await saveLibrary(detailed);
+    } catch (error) {
+      // As above: the counter must not outlive the run it describes.
+      if (runId.current === id) setFetchingDetails(null);
+      throw error;
+    }
   }, []);
 
   useEffect(() => {
@@ -376,17 +382,34 @@ export default function App() {
       // *stale* run's continuation to re-arm it afterwards.)
       setFetchingDetails(null);
 
-      const enriched = await enrichLibrary(outcome.films, (progress) => {
-        if (runId.current !== id) return;
-        setFilms(progress.films);
-        setEnriching({ done: progress.done, total: progress.total });
-      });
+      try {
+        const enriched = await enrichLibrary(outcome.films, (progress) => {
+          if (runId.current !== id) return;
+          setFilms(progress.films);
+          setEnriching({ done: progress.done, total: progress.total });
+        });
 
-      if (runId.current !== id) return;
-      setFilms(enriched);
-      setEnriching(null);
-      await saveLibrary(enriched);
-      await fillInDetails(enriched, id);
+        if (runId.current !== id) return;
+        setFilms(enriched);
+        setEnriching(null);
+        await saveLibrary(enriched);
+        await fillInDetails(enriched, id);
+      } catch (error) {
+        // A rejected run used to leave its counter on screen for good: the
+        // interface went on saying "23 of 400" while nothing was being
+        // fetched. Nobody was trapped — the films were already usable and
+        // "Import a different export" sits beside the counter — but the one
+        // thing on screen was a lie. Only this run's counters are cleared, so
+        // a failure arriving after a reset or a second import cannot wipe the
+        // progress of whatever is running now.
+        if (runId.current === id) {
+          setEnriching(null);
+          setFetchingDetails(null);
+        }
+        // Rethrown: the caller logs it, and swallowing it here would trade a
+        // stuck counter for a silent one.
+        throw error;
+      }
     },
     [fillInDetails, refreshBoards],
   );
@@ -508,6 +531,11 @@ export default function App() {
 
   function performReset() {
     restoreCancelled.current = true;
+    // Both of these are "is this panel folded open", and both belong to the
+    // library that is being discarded. Leaving them set means the next import
+    // opens with a rail and a tool tray the user never asked for on this one.
+    setRailOpen(false);
+    setToolsOpen(false);
     runId.current += 1;
     clearLibrary().catch((error: unknown) => {
       console.error('Failed to clear the saved library', error);

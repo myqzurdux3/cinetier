@@ -37,6 +37,22 @@ describe('lookupByImdbId', () => {
     });
   });
 
+  it('encodes the identifier into the path rather than pasting it in', async () => {
+    // The id comes out of a CSV the user chose. Every export seen so far
+    // carries `tt` and digits, but the title beside it has always been
+    // encoded and this had not been — a `?` or a `#` in that field would
+    // rewrite the request rather than be part of it.
+    const fetchMock = mockFetch({ movie_results: [] });
+
+    await lookupByImdbId('tt01?x#y/z');
+
+    const url = String(fetchMock.mock.calls[0]?.[0]);
+    const [path, query = ''] = url.split('?');
+    expect(path).toContain('tt01%3Fx%23y%2Fz');
+    // The api_key and external_source are still the only query it carries.
+    expect(query).toMatch(/^api_key=.*&external_source=imdb_id$/);
+  });
+
   it('returns null when TMDB knows nothing about that identifier', async () => {
     mockFetch({ movie_results: [], tv_results: [] });
     expect(await lookupByImdbId('tt9999999')).toBeNull();

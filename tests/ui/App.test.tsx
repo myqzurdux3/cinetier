@@ -199,6 +199,26 @@ describe('App enrichment', () => {
     expect(enrichLibrary).toHaveBeenCalled();
   });
 
+  it('takes the progress counter away when enrichment fails, instead of leaving it lying', async () => {
+    // A rejected run used to leave "Finding posters… 0 of 10" on screen for
+    // good, with nothing being fetched behind it. Nobody was trapped, but the
+    // one moving thing on the page was saying something untrue.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(enrichLibrary).mockRejectedValue(new Error('TMDB is down'));
+    render(<App />);
+
+    await importFixture();
+
+    // The films are still there — the parse succeeded, only the fill-in did
+    // not — and the counter is gone.
+    expect(await screen.findByRole('region', { name: 'Pool' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText(/finding posters/i)).not.toBeInTheDocument();
+    });
+
+    consoleError.mockRestore();
+  });
+
   it('does not save the library it has not finished enriching', async () => {
     // Saving the un-enriched films would persist a library with no posters and
     // no details, and the next visit would restore exactly that.
@@ -407,6 +427,37 @@ describe('App persistence', () => {
     enrichDeferred.resolve(enriched);
 
     await waitFor(() => expect(saveLibrary).toHaveBeenCalledWith(enriched));
+  });
+
+  it('folds the rail and the tool tray back up on reset', async () => {
+    // Both are "is this panel open", and both belong to the library being
+    // discarded. Left set, the next import opened with a filter rail and a
+    // tray of board tools the user never asked for on this one.
+    render(<App />);
+    await importFixture();
+
+    await userEvent.click(await screen.findByRole('button', { name: /^filters$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^board tools$/i }));
+    expect(screen.getByRole('button', { name: /^filters$/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: /^board tools$/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+
+    await resetLibrary();
+    await importFixture();
+
+    expect(await screen.findByRole('button', { name: /^filters$/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: /^board tools$/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 
   it('clears the stored library on reset and returns to the import screen', async () => {
