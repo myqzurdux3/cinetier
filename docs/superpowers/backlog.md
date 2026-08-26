@@ -336,16 +336,22 @@ effects and their writers, not the render tree.
   `tests/ui/App.test.tsx` already has the deferred-promise machinery to do it properly.
 - **Every test file redefines the same `Film` factory** — six near-identical copies. A shared
   `tests/support/film.ts` would delete about a hundred lines.
-- **No end-to-end suite exists.** The specification calls for Playwright covering
+- ~~**No end-to-end suite exists.** The specification calls for Playwright covering
   import → filter → move a card → export → reload. No plan has scheduled it and no CI job
-  runs it.
-- **The README has no screenshot**, which the specification asks for and which only became
-  possible once the library screen shipped.
-- **CI actions target a deprecated runner.** `actions/checkout@v4` and `setup-node@v4` warn;
-  a bump to `@v5` clears it.
-- **`tests/ui/App.test.tsx` restores its `console.error` spy without `try/finally` in five
-  places** (the file contains no `finally` at all), so a `waitFor` timeout would leak the spy
-  into later tests in that file.
+  runs it.~~ Closed on 2026-08-24: `e2e/` drives a real Chromium, and CI runs it in a
+  `browser` job of its own against the production build. Twenty-three checks as of
+  2026-08-27, each written for a defect a unit test could not reach.
+- ~~**The README has no screenshot**, which the specification asks for and which only became
+  possible once the library screen shipped.~~ Closed on 2026-08-24: `docs/media/board.jpg`
+  and `export.jpg`, both with real posters. Noticed as stale on 2026-08-27.
+- ~~**CI actions target a deprecated runner.** `actions/checkout@v4` and `setup-node@v4` warn;
+  a bump to `@v5` clears it.~~ Closed by the Dependabot bumps: checkout and setup-node are
+  at v7, cache at v6, the Pages actions at v5 and v6.
+- ~~**`tests/ui/App.test.tsx` restores its `console.error` spy without `try/finally` in five
+  places**~~ Closed on 2026-08-27, across all seven files that did it. `tests/support/console.ts`
+  registers the restore with `onTestFinished`, which runs whichever way the test ends. Two
+  ordered tests hold it: one that silences the console and then throws, and one after it that
+  finds the real `console.error` back.
 - **A transient "Unhandled Errors" block attributed to `tests/ui/FilmGrid.test.tsx` appeared
   in 1 of 9 full-suite runs during the filter-rail plan.** A re-review established nothing in
   the filter-rail work can produce it — that file does not render `App` — so it is

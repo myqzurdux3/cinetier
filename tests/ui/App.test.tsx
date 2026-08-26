@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { silenceConsoleError } from '../support/console';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
@@ -203,7 +204,7 @@ describe('App enrichment', () => {
     // A rejected run used to leave "Finding posters… 0 of 10" on screen for
     // good, with nothing being fetched behind it. Nobody was trapped, but the
     // one moving thing on the page was saying something untrue.
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    silenceConsoleError();
     vi.mocked(enrichLibrary).mockRejectedValue(new Error('TMDB is down'));
     render(<App />);
 
@@ -215,8 +216,6 @@ describe('App enrichment', () => {
     await waitFor(() => {
       expect(screen.queryByText(/finding posters/i)).not.toBeInTheDocument();
     });
-
-    consoleError.mockRestore();
   });
 
   it('does not save the library it has not finished enriching', async () => {
@@ -498,7 +497,7 @@ describe('App persistence', () => {
   });
 
   it('logs rather than throwing when the restore itself fails', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = silenceConsoleError();
     vi.mocked(loadLibrary).mockRejectedValue(new Error('IndexedDB is unavailable'));
 
     render(<App />);
@@ -506,12 +505,10 @@ describe('App persistence', () => {
     await waitFor(() => expect(consoleError).toHaveBeenCalled());
     // No crash, and no phantom library: the import screen is still there.
     expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
-
-    consoleError.mockRestore();
   });
 
   it('logs rather than throwing when clearing the stored library fails on reset', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = silenceConsoleError();
     vi.mocked(loadLibrary).mockResolvedValue([film('a')]);
     vi.mocked(clearLibrary).mockRejectedValue(new Error('IndexedDB is unavailable'));
 
@@ -521,8 +518,6 @@ describe('App persistence', () => {
     await waitFor(() => expect(consoleError).toHaveBeenCalled());
     // The screen still resets even though the underlying delete failed.
     expect(screen.getByRole('button', { name: /imdb/i })).toBeInTheDocument();
-
-    consoleError.mockRestore();
   });
 });
 
@@ -653,7 +648,7 @@ describe('App enrichment races', () => {
   });
 
   it('logs rather than throwing when saving the enriched library fails', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = silenceConsoleError();
     vi.mocked(saveLibrary).mockRejectedValue(new Error('IndexedDB is unavailable'));
 
     render(<App />);
@@ -662,8 +657,6 @@ describe('App enrichment races', () => {
     await waitFor(() => expect(consoleError).toHaveBeenCalled());
     // The library the user just imported is still on screen.
     expect(screen.getByRole('button', { name: /import a different export/i })).toBeInTheDocument();
-
-    consoleError.mockRestore();
   });
 });
 
@@ -722,7 +715,7 @@ describe('App filter rail', () => {
     // actually caught (not merely harmless in this run): an unhandled
     // rejection wouldn't fail this expectation, only the test file as a
     // whole, which would point at the wrong line.
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = silenceConsoleError();
     vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
     vi.mocked(loadFilters).mockRejectedValue(new Error('storage is blocked'));
 
@@ -730,8 +723,6 @@ describe('App filter rail', () => {
 
     expect(await screen.findByText('Kept')).toBeInTheDocument();
     await waitFor(() => expect(consoleError).toHaveBeenCalled());
-
-    consoleError.mockRestore();
   });
 
   it('does not reinstate criteria from a filters restore that resolves after an import wins', async () => {
@@ -960,7 +951,7 @@ describe('App filter rail', () => {
     // The restore itself succeeded — the library is on screen. Only the
     // second pass over it failed, and the message should say so rather than
     // implicating the restore that worked fine.
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = silenceConsoleError();
     vi.mocked(loadLibrary).mockResolvedValue([film('a', { title: 'Kept', rating: 90 })]);
     vi.mocked(countPendingDetails).mockReturnValue(1);
     vi.mocked(enrichDetails).mockRejectedValue(new Error('TMDB is unreachable'));
@@ -978,8 +969,6 @@ describe('App filter rail', () => {
       'Failed to restore the saved library',
       expect.anything(),
     );
-
-    consoleError.mockRestore();
   });
 });
 

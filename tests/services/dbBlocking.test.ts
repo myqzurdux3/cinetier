@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { silenceConsoleError, silenceConsoleWarn } from '../support/console';
 
 // The same approach as dbTerminated.test.ts, and for the same reason:
 // fake-indexeddb cannot be made to reject an open, and it fires `blocking`
@@ -50,7 +51,7 @@ describe('db() when this tab is the one in the way', () => {
   });
 
   it('closes its connection so the other tab can upgrade, and reopens on the next call', async () => {
-    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleWarn = silenceConsoleWarn();
     const close = vi.fn();
     const first = { marker: 'first', close };
     const second = { marker: 'second', close: vi.fn() };
@@ -77,11 +78,10 @@ describe('db() when this tab is the one in the way', () => {
     expect(openDBMock).toHaveBeenCalledTimes(2);
 
     expect(consoleWarn.mock.calls[0]?.[0]).toMatch(/reload/i);
-    consoleWarn.mockRestore();
   });
 
   it('names an unknown blocked version rather than printing "null"', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = silenceConsoleError();
     let callbacks: Callbacks = {};
     openDBMock.mockImplementationOnce((_name: unknown, _version: unknown, cb: unknown) => {
       callbacks = cb as Callbacks;
@@ -97,8 +97,6 @@ describe('db() when this tab is the one in the way', () => {
     const message = String(consoleError.mock.calls[0]?.[0]);
     expect(message).not.toMatch(/null/);
     expect(message).toMatch(/unknown version/);
-
-    consoleError.mockRestore();
   });
 });
 
@@ -110,7 +108,7 @@ describe('resetDatabase when another tab holds the database open', () => {
   });
 
   it('says so instead of hanging silently', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = silenceConsoleError();
     deleteDBMock.mockImplementation(() => Promise.resolve());
 
     const { resetDatabase } = await import('@/services/db');
@@ -124,7 +122,5 @@ describe('resetDatabase when another tab holds the database open', () => {
 
     options?.blocked?.(4);
     expect(String(consoleError.mock.calls[0]?.[0])).toMatch(/blocked/i);
-
-    consoleError.mockRestore();
   });
 });

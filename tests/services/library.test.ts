@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { silenceConsoleError } from '../support/console';
 import 'fake-indexeddb/auto';
 import { openDB, type DBSchema } from 'idb';
 import { saveLibrary, loadLibrary, clearLibrary, LIBRARY_VERSION } from '@/services/library';
@@ -134,7 +135,7 @@ describe('the saved library carries the shape it was written in', () => {
     // the silent corruption the stamp exists to prevent — and refusing without
     // saying so would show the import screen, which looks exactly like a
     // library that vanished.
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    silenceConsoleError();
     await (
       await db()
     ).put(
@@ -145,7 +146,5 @@ describe('the saved library carries the shape it was written in', () => {
 
     expect(await loadLibrary()).toBeNull();
     expect(databaseStall()).toEqual({ reason: 'newer', store: 'library' });
-
-    consoleError.mockRestore();
   });
 });

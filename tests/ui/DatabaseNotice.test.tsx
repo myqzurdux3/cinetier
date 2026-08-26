@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { silenceConsoleError } from '../support/console';
 import { render, screen, act } from '@testing-library/react';
 
 // 'idb' is mocked so the open can be held unsettled on purpose. That is the
@@ -52,7 +53,7 @@ describe('DatabaseNotice', () => {
   });
 
   it('explains a blocked upgrade, and takes itself away once it goes through', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    silenceConsoleError();
     let callbacks: Callbacks = {};
     let letTheOpenFinish: (database: unknown) => void = () => undefined;
 
@@ -85,7 +86,5 @@ describe('DatabaseNotice', () => {
       await Promise.resolve();
     });
     expect(screen.queryByRole('status')).toBeNull();
-
-    consoleError.mockRestore();
   });
 });

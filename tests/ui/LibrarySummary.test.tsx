@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { silenceConsoleError } from '../support/console';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LibrarySummary } from '@/ui/library/LibrarySummary';
@@ -100,7 +101,7 @@ describe('LibrarySummary', () => {
   it('lists two identical warnings as two rows', () => {
     // Two untitled rows produce byte-identical warnings, so keying the list by
     // message text gives React duplicate keys for genuinely distinct rows.
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = silenceConsoleError();
     const repeated = 'Skipped a row with no title.';
 
     render(
@@ -115,8 +116,6 @@ describe('LibrarySummary', () => {
 
     expect(screen.getAllByText(repeated)).toHaveLength(2);
     expect(consoleError).not.toHaveBeenCalled();
-
-    consoleError.mockRestore();
   });
 
   it('offers a way to start over', async () => {
