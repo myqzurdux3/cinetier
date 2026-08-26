@@ -744,6 +744,44 @@ check(
   { width: 420, height: 900, touch: true },
 );
 
+check(
+  'a phone shows the top of the board without scrolling',
+  async (page) => {
+    // Measured, not guessed: the library summary, the filter button, the board
+    // bar, the toolbar and the pre-fill panel used to stack to about seven
+    // hundred pixels, so an 844-pixel phone opened on one row and a sliver of
+    // the next. Everything that is not ranking a film now folds behind "Board
+    // tools" below `sm`.
+    await importLibrary(page);
+
+    const visibleRows = await page.evaluate(() =>
+      [...document.querySelectorAll('ul[aria-label]')]
+        .filter((list) => /\d+ films?$/.test(list.getAttribute('aria-label') ?? ''))
+        .filter((list) => {
+          const box = list.getBoundingClientRect();
+          return box.top >= 0 && box.bottom <= innerHeight;
+        }).length,
+    );
+    if (visibleRows < 3) {
+      throw new Error(`only ${String(visibleRows)} rows fit on a phone screen without scrolling`);
+    }
+
+    // Folded away, and reachable — a control that is hidden and stays hidden
+    // is worse than one that costs a scroll.
+    const png = page.getByRole('button', { name: 'Save as PNG' });
+    if (await png.isVisible()) throw new Error('the export button is not folded away on a phone');
+    await page.getByRole('button', { name: 'Board tools' }).click();
+    await page.waitForTimeout(200);
+    if (!(await png.isVisible())) throw new Error('"Board tools" did not reveal the export button');
+    for (const name of ['New board', 'Duplicate', 'Edit rows', 'Pre-fill from my ratings']) {
+      if (!(await page.getByRole('button', { name }).isVisible())) {
+        throw new Error(`"Board tools" left ${name} hidden`);
+      }
+    }
+  },
+  { width: 390, height: 844 },
+);
+
 let failed = 0;
 for (const { name, run, viewport } of checks) {
   const { browser, page, errors } = await open(viewport);

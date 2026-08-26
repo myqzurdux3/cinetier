@@ -425,10 +425,16 @@ ancestor sets it.
 
 Still open, from the same pass:
 
-- **The board sits about 700px down a phone screen**, under the library
+- ~~**The board sits about 700px down a phone screen**, under the library
   summary, the filter button, the board bar, the toolbar and the pre-fill
-  panel. Nothing is broken and nothing overflows, but a phone shows a lot of
-  chrome before the first row. The controls also wrap ragged — "Delete board"
-  and "Save as PNG" each land alone on a line.
-- **A pinch or a two-finger gesture is untested.** Both new checks drive a
+  panel.~~ Closed the same day: below `sm`, everything that is not ranking a
+  film — the four board-set actions, row editing, the export, the pre-fill
+  panel — folds behind one "Board tools" toggle, the same pattern the filter
+  rail already uses below `lg`. The first row moved from 711px to 415px, so a
+  390x844 phone opens on four rows instead of one. The wrappers are
+  `display: contents` so that no wider screen's layout moves at all.
+- **A pinch or a two-finger gesture is untested.** Both touch checks drive a
   single touch point.
+- **The library summary still costs 120px on a phone**, and the theme toggle
+  and mark another 60 above it. Untouched: it is what tells you which import
+  you are looking at, and 415px already fits four rows.

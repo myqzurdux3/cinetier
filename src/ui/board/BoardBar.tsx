@@ -11,6 +11,13 @@ interface BoardBarProps {
   onDuplicate: () => void;
   onDelete: () => void;
   onSaveFile: () => void;
+  /**
+   * Whether the four board-set actions are showing on a narrow screen. Above
+   * `sm` they always are; below it they are folded away behind App's "Board
+   * tools" toggle, because a phone showed seven hundred pixels of controls
+   * before the first row of the tier list.
+   */
+  actionsOpen: boolean;
 }
 
 const BUTTON =
@@ -33,6 +40,7 @@ export function BoardBar({
   onDuplicate,
   onDelete,
   onSaveFile,
+  actionsOpen,
 }: BoardBarProps) {
   const nameId = useId();
   const pickerId = useId();
@@ -78,26 +86,34 @@ export function BoardBar({
         </>
       )}
 
-      <button type="button" className={BUTTON} onClick={onCreate}>
-        New board
-      </button>
-      <button type="button" className={BUTTON} onClick={onSaveFile}>
-        Save as a file
-      </button>
-      <button type="button" className={BUTTON} onClick={onDuplicate}>
-        Duplicate
-      </button>
-      <button
-        type="button"
-        className={BUTTON}
-        onClick={onDelete}
-        disabled={boards.length <= 1}
-        // Disabled rather than absent at one board: the control keeps its
-        // place in the row, and its disabled state says "there is nothing to
-        // delete this to" more clearly than a button that comes and goes.
-      >
-        Delete board
-      </button>
+      {/*
+        `contents` rather than a block: the wrapper exists only to hide the
+        four buttons together below `sm`, and any other display value would
+        take them out of the row's wrapping and stack them on their own line
+        on every wider screen.
+      */}
+      <div className={`${actionsOpen ? 'contents' : 'hidden'} sm:contents`}>
+        <button type="button" className={BUTTON} onClick={onCreate}>
+          New board
+        </button>
+        <button type="button" className={BUTTON} onClick={onSaveFile}>
+          Save as a file
+        </button>
+        <button type="button" className={BUTTON} onClick={onDuplicate}>
+          Duplicate
+        </button>
+        <button
+          type="button"
+          className={BUTTON}
+          onClick={onDelete}
+          disabled={boards.length <= 1}
+          // Disabled rather than absent at one board: the control keeps its
+          // place in the row, and its disabled state says "there is nothing to
+          // delete this to" more clearly than a button that comes and goes.
+        >
+          Delete board
+        </button>
+      </div>
     </div>
   );
 }
