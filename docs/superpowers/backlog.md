@@ -257,11 +257,9 @@ effects and their writers, not the render tree.
   behind.
 - ~~**`FilmGrid`'s `generation` prop is now dead in production.**~~ Removed on 2026-08-26.
   The entrance now runs on mount, which is what it meant.
-- **`PrefillPanel` receives the unfiltered library, not the pool.** "Pre-fill from my
-  ratings" can place titles the filter rail is currently hiding, and its preview counts
-  them — the count and the placement agree with each other, just not with what the rail
-  shows on screen. Deliberate: the rail filters the pool and only the pool. User-visible,
-  and unverified by hand.
+- ~~**`PrefillPanel` receives the unfiltered library, not the pool.**~~ The same entry as the
+  one two sections up, and closed with it on 2026-08-26: the behaviour stands and the panel
+  now says so when the filters are hiding anything.
 - ~~**`<summary>` and the checkboxes take the UA focus ring, not the accent token.**~~ Closed
   on 2026-08-26. An end-to-end check tabs to a section and reads the computed box-shadow,
   since `:focus-visible` is the state under test and no unit test can produce it.
