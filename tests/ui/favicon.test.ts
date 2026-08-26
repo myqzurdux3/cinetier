@@ -17,6 +17,6 @@ describe('favicon pipeline', () => {
   it('registers the plugin that replaces it', () => {
     const config = readFileSync('vite.config.ts', 'utf8');
     expect(config).toMatch(/faviconPlugin\(\)/);
-    expect(config).toMatch(/from ['"]\.\/vite-plugins\/favicon['"]/);
+    expect(config).toMatch(/from ['"]\.\/vite-plugins\/favicon(\.ts)?['"]/);
   });
 });

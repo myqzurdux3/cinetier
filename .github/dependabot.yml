@@ -1,13 +1,20 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
     groups:
       dev-dependencies:
         dependency-type: development
+    ignore:
+      # typescript-eslint 8.x declares `typescript: >=4.8.4 <6.1.0`, so npm
+      # cannot resolve a TypeScript 7 tree and every weekly run fails on
+      # "Error while updating peer dependency". Drop this entry once
+      # typescript-eslint ships a release that accepts TypeScript 7.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
   - package-ecosystem: github-actions
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
