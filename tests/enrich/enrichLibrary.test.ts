@@ -3,6 +3,7 @@ import 'fake-indexeddb/auto';
 import { enrichLibrary } from '@/enrich/enrichLibrary';
 import { resetDatabase } from '@/services/db';
 import type { Film } from '@/domain/film';
+import { titleYearKey } from '@/domain/normalize';
 // Named namespace import purely for its type: `consistent-type-imports` forbids the
 // brief's inline `typeof import('@/services/tmdb')`, so the module type is captured
 // here instead and referenced by name below. No behavioral difference from the brief.
@@ -147,6 +148,35 @@ describe('enrichLibrary', () => {
     const result = await enrichLibrary([film({ id: 'lb:x', title: 'Unknown' })], () => {});
     expect(result).toHaveLength(1);
     expect(result[0]!.posterPath).toBeNull();
+  });
+
+  it('does not remember an unreachable TMDB as a title TMDB has never heard of', async () => {
+    // The cache keeps a result for thirty days, and "the request failed" used
+    // to be recorded as the same null that "TMDB has nothing" is. One dropped
+    // connection meant no poster for a month.
+    const { TmdbUnavailable } = await import('@/services/tmdb');
+    const { getCached } = await import('@/services/tmdbCache');
+    const unknown = film({ id: 'lb:x', title: 'Unknown' });
+
+    vi.mocked(searchByTitle).mockRejectedValue(new TmdbUnavailable('the train went into a tunnel'));
+    const first = await enrichLibrary([unknown], () => {});
+
+    // The run finishes and the film survives it — a failed lookup costs a
+    // poster, never the import.
+    expect(first).toHaveLength(1);
+    expect(first[0]!.posterPath).toBeNull();
+    // Nothing was written, so the next run asks again rather than trusting a
+    // failure it mistook for an answer.
+    expect(await getCached(titleYearKey(unknown))).toBeUndefined();
+
+    vi.mocked(searchByTitle).mockResolvedValue({
+      tmdbId: 603,
+      imdbId: null,
+      posterPath: '/found.jpg',
+      publicRating: 82,
+    });
+    const second = await enrichLibrary([unknown], () => {});
+    expect(second[0]!.posterPath).toBe('/found.jpg');
   });
 
   it('re-merges once enrichment gives two records the same TMDB identifier', async () => {

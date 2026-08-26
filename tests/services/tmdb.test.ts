@@ -5,12 +5,13 @@ import {
   posterUrl,
   fetchMovieDetails,
   fetchTvDetails,
+  TmdbUnavailable,
 } from '@/services/tmdb';
 
-function mockFetch(payload: unknown, ok = true) {
+function mockFetch(payload: unknown, ok = true, status = ok ? 200 : 500) {
   const fetchMock = vi.fn().mockResolvedValue({
     ok,
-    status: ok ? 200 : 500,
+    status,
     json: async () => payload,
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -97,9 +98,21 @@ describe('lookupByImdbId', () => {
     expect(match?.publicRating).toBeNull();
   });
 
-  it('returns null rather than throwing when TMDB fails', async () => {
-    mockFetch({}, false);
+  it('separates "TMDB has nothing" from "TMDB could not be asked"', async () => {
+    // These used to be the same null, and the caches keep a result for thirty
+    // days — so a title looked up while the network was down was recorded as
+    // one TMDB does not know about, and not asked about again for a month.
+    // 404 is an answer about this identifier; 500 is not.
+    mockFetch(null, false, 404);
     expect(await lookupByImdbId('tt0133093')).toBeNull();
+
+    mockFetch({}, false, 500);
+    await expect(lookupByImdbId('tt0133093')).rejects.toBeInstanceOf(TmdbUnavailable);
+  });
+
+  it('treats a network that never answered as unavailable, not as an empty answer', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(lookupByImdbId('tt0133093')).rejects.toBeInstanceOf(TmdbUnavailable);
   });
 
   it('sends the identifier but never anything about the user', async () => {
@@ -178,9 +191,12 @@ describe('fetchMovieDetails', () => {
     });
   });
 
-  it('reports null when the request fails', async () => {
-    mockFetch(null, false);
+  it('reports null for an identifier TMDB does not have, and refuses to answer for a failure', async () => {
+    mockFetch(null, false, 404);
     expect(await fetchMovieDetails(949)).toBeNull();
+
+    mockFetch(null, false, 503);
+    await expect(fetchMovieDetails(949)).rejects.toBeInstanceOf(TmdbUnavailable);
   });
 
   it('treats a zero runtime as no runtime', async () => {
@@ -216,8 +232,11 @@ describe('fetchTvDetails', () => {
     expect(String(fetchMock.mock.calls[0]![0])).toContain('/tv/1396');
   });
 
-  it('reports null when the request fails', async () => {
-    mockFetch(null, false);
+  it('reports null for an identifier TMDB does not have, and refuses to answer for a failure', async () => {
+    mockFetch(null, false, 404);
     expect(await fetchTvDetails(1396)).toBeNull();
+
+    mockFetch(null, false, 503);
+    await expect(fetchTvDetails(1396)).rejects.toBeInstanceOf(TmdbUnavailable);
   });
 });

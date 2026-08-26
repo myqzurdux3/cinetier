@@ -1,7 +1,7 @@
 import type { Film } from '@/domain/film';
 import { mergeLibraries } from '@/domain/dedupe';
 import { titleYearKey } from '@/domain/normalize';
-import { lookupByImdbId, searchByTitle, type TmdbMatch } from '@/services/tmdb';
+import { lookupByImdbId, searchByTitle, TmdbUnavailable, type TmdbMatch } from '@/services/tmdb';
 import { getCached, putCached } from '@/services/tmdbCache';
 
 export interface EnrichProgress {
@@ -41,12 +41,22 @@ async function resolve(film: Film): Promise<TmdbMatch | null> {
   const cached = await getCached(key);
   if (cached !== undefined) return cached;
 
-  const match = film.imdbId
-    ? await lookupByImdbId(film.imdbId)
-    : await searchByTitle(film.title, film.year);
+  try {
+    const match = film.imdbId
+      ? await lookupByImdbId(film.imdbId)
+      : await searchByTitle(film.title, film.year);
 
-  await putCached(key, match);
-  return match;
+    await putCached(key, match);
+    return match;
+  } catch (error) {
+    // Only an *answer* is worth caching. Recording "TMDB was unreachable" as
+    // "TMDB has nothing" would silence this title for the cache's thirty days,
+    // so a dropped connection at the wrong moment cost a poster for a month.
+    // Anything else — a database write that failed, say — is a real fault and
+    // still propagates.
+    if (!(error instanceof TmdbUnavailable)) throw error;
+    return null;
+  }
 }
 
 /** Apply a match without ever displacing something the user's own export supplied. */

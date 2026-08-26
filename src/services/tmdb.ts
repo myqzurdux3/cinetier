@@ -41,14 +41,36 @@ function toMatch(movie: TmdbMovieSummary, imdbId: string | null): TmdbMatch {
   };
 }
 
+/**
+ * TMDB could not be asked — the network dropped, the key was refused, the
+ * service answered 5xx or rate-limited us.
+ *
+ * Distinct from "TMDB answered, and has nothing", which is a `null` result.
+ * The two used to be the same value, and the caches record a result for thirty
+ * days: a title that failed because a train went into a tunnel would not be
+ * asked about again for a month. Only the answer is worth remembering.
+ */
+export class TmdbUnavailable extends Error {}
+
 async function getJson(url: string): Promise<unknown | null> {
+  let response: Response;
   try {
-    const response = await fetch(url);
-    if (!response.ok) return null;
+    response = await fetch(url);
+  } catch (error) {
+    throw new TmdbUnavailable('The TMDB request could not be made', { cause: error });
+  }
+
+  // 404 is an answer: this identifier names nothing at TMDB. Every other
+  // refusal is TMDB not answering, and says nothing about the title.
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new TmdbUnavailable(`TMDB answered ${String(response.status)}`);
+  }
+
+  try {
     return (await response.json()) as unknown;
-  } catch {
-    // A failed lookup costs a poster, never the import. Never let it propagate.
-    return null;
+  } catch (error) {
+    throw new TmdbUnavailable('TMDB answered with something that is not JSON', { cause: error });
   }
 }
 
