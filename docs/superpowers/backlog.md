@@ -124,23 +124,20 @@ effects and their writers, not the render tree.
 - **A rejected enrichment leaves the progress counter on screen.** It logs, and the reset
   button is always reachable, so nobody is trapped — but the interface says it is still
   working when it has stopped.
-- **A failed IndexedDB open is cached for the session.** `connection ??=` stores the
-  rejected promise, so if the database cannot open — private browsing, quota, a blocked
-  upgrade — every later read and write fails with no retry. Since the library now shares
-  that connection, the blast radius is larger than when this was first accepted.
-- **`openDB` has no `blocking` callback.** `blocked` (added with the v2 schema) fires on the
-  tab that is *waiting*; `blocking` fires on the tab that is *in the way*, and closing the
-  connection there is what lets the other tab proceed. Adding it cannot help the v1-to-v2
-  transition — the blocking tab is running the old bundle — but it is what stops the next
-  version bump from reproducing this exactly.
-- **A blocked upgrade still shows the user a "your library vanished" screen.** The `blocked`
-  handler logs what happened and says in its own comment that it cannot unblock the hang;
-  only closing the other tab can. Meanwhile `loadLibrary` never resolves, `films` stays null,
-  and the import screen is what the user sees. A visible message would be the honest fix.
-- **`resetDatabase`'s `deleteDB` has no `blocked` handler** and can hang exactly the way the
-  upgrade could, for the same reason.
-- **`String(blockedVersion)` can render "null"** in the blocked message, since `idb` types it
-  `number | null`.
+- ~~**A failed IndexedDB open is cached for the session.**~~ Closed on 2026-08-26: the
+  open now clears the memoised promise on rejection and rethrows, so the failure still
+  reaches its caller and the next call tries again.
+- ~~**`openDB` has no `blocking` callback.**~~ Closed on 2026-08-26. It closes this tab's
+  connection and forgets it, so the waiting tab proceeds. It still cannot help the
+  transition that raised this, since the blocking tab runs the old bundle — it is what
+  stops the *next* version bump from reproducing it.
+- ~~**A blocked upgrade still shows the user a "your library vanished" screen.**~~ Closed on
+  2026-08-26. `db()` now publishes the stall, and `DatabaseNotice` in the shell says the data
+  is still there and that closing the other tab is what fixes it. It withdraws itself when
+  the upgrade goes through, so no reload is needed.
+- ~~**`resetDatabase`'s `deleteDB` has no `blocked` handler**~~ Closed on 2026-08-26.
+- ~~**`String(blockedVersion)` can render "null"**~~ Closed on 2026-08-26: it reads
+  "an unknown version".
 - **Persistence is all-or-nothing.** The library is saved only after enrichment completes,
   so closing the tab mid-enrichment loses the import. The poster cache survives, so the
   re-import is fast, but it must be repeated. Saving straight after parsing would close it.
