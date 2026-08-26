@@ -1,5 +1,5 @@
 import type { Plugin } from 'vite';
-import { FAVICON_COLOURS, logoSvgMarkup, type LogoRole } from '../src/ui/logoMark';
+import { FAVICON_COLOURS, logoSvgMarkup, type LogoRole } from '../src/ui/logoMark.ts';
 
 /**
  * Writes the favicon into index.html from the same description the component

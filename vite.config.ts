@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath, URL } from 'node:url';
-import { faviconPlugin } from './vite-plugins/favicon';
+import { faviconPlugin } from './vite-plugins/favicon.ts';
 
 export default defineConfig({
   // GitHub Pages serves the project at /cinetier/, local dev at /.
