@@ -73,6 +73,11 @@ export default function App() {
     null,
   );
   const [railOpen, setRailOpen] = useState(false);
+  // Below `sm`, everything that is not ranking a film — the board-set
+  // actions, row editing, the export, the pre-fill panel — folds behind one
+  // toggle. A phone showed about seven hundred pixels of controls before
+  // the first row of the tier list; measured, not guessed.
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   const [history, setHistory] = useState<History<TierBoard>>(() =>
     initHistory(createBoard('board-1', 'My ranking')),
@@ -626,6 +631,7 @@ export default function App() {
                   onSaveFile={() => {
                     void saveBoardFile();
                   }}
+                  actionsOpen={toolsOpen}
                 />
 
                 <div className="flex flex-wrap gap-2">
@@ -649,20 +655,33 @@ export default function App() {
                   >
                     Redo
                   </button>
+                  {/* See BoardBar on why this wrapper is `contents`. */}
+                  <div className={`${toolsOpen ? 'contents' : 'hidden'} sm:contents`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingRows((editing) => !editing);
+                      }}
+                      aria-expanded={editingRows}
+                      className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent"
+                    >
+                      {editingRows ? 'Done editing rows' : 'Edit rows'}
+                    </button>
+                    <ExportButton board={boardValue} films={films} />
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setEditingRows((editing) => !editing);
-                    }}
-                    aria-expanded={editingRows}
-                    className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent"
+                    onClick={() => setToolsOpen((open) => !open)}
+                    aria-expanded={toolsOpen}
+                    className="rounded-card border border-line px-3 py-2 text-sm text-ink-dim hover:text-ink focus:ring-2 focus:ring-accent sm:hidden"
                   >
-                    {editingRows ? 'Done editing rows' : 'Edit rows'}
+                    Board tools
                   </button>
-                  <ExportButton board={boardValue} films={films} />
                 </div>
 
-                <PrefillPanel board={boardValue} films={films} dispatch={dispatch} />
+                <div className={`${toolsOpen ? 'block' : 'hidden'} sm:block`}>
+                  <PrefillPanel board={boardValue} films={films} dispatch={dispatch} />
+                </div>
 
                 <BoardScreen
                   board={boardValue}
