@@ -19,6 +19,8 @@ import {
   labelBlocks,
   rowList,
   rows,
+  touchDrag,
+  touchSwipe,
 } from './harness.mjs';
 
 const checks = [];
@@ -692,6 +694,55 @@ check('a long row name is centred and stays inside its block', async (page) => {
   const letter = blocks.find((candidate) => candidate.text === 'C');
   if (!letter) throw new Error('the untouched rows lost their letters');
 });
+
+check(
+  'a finger drags a film into a row',
+  async (page) => {
+    // The app rendered correctly on a phone and could not be used on one. A
+    // touch that reached dnd-kit's PointerSensor activated the drag, then the
+    // browser claimed the same gesture as a page scroll and cancelled it —
+    // "Moving Alpha was cancelled", every time, with the film back where it
+    // started. A MouseSensor for the mouse and a TouchSensor with a hold for
+    // the finger separate the two gestures.
+    await importLibrary(page);
+    await touchDrag(page, poolCard(page, 'Alpha'), rowList(page, 'S'));
+    eq((await rows(page)).S, ['Alpha'], 'after a finger drags Alpha to S');
+  },
+  { width: 420, height: 2200, touch: true },
+);
+
+check(
+  'a finger that moves at once does not drag, and cards leave scrolling alone',
+  async (page) => {
+    // The other half of the same choice, and the reason the fix is not simply
+    // `touch-action: none` on every card: the pool is a wall of cards, so if a
+    // touch starting on one could never scroll, the pool could not be scrolled
+    // by finger at all. A swipe shorter than the sensor's delay must move no
+    // film, and the card must leave the browser's panning alone.
+    //
+    // The scroll itself is asserted through `touch-action` rather than by
+    // reading scrollY: CDP dispatches touch *events*, and Chrome does not turn
+    // those into a compositor pan, so no synthetic swipe here scrolls anything
+    // however the app is written. What is checkable is the property that
+    // decides whether a real finger's swipe scrolls, and it is exactly the one
+    // a well-meant fix would break.
+    await importLibrary(page);
+    const card = poolCard(page, 'Alpha');
+    await touchSwipe(page, card, -260);
+    eq((await rows(page)).S, [], 'after a swipe from a card');
+
+    const panning = await card.evaluate((element) => {
+      for (let node = element; node; node = node.parentElement) {
+        if (getComputedStyle(node).touchAction === 'none') return node.className || node.tagName;
+      }
+      return null;
+    });
+    if (panning !== null) {
+      throw new Error(`a card ancestor sets touch-action: none, so a finger cannot scroll from it (${panning})`);
+    }
+  },
+  { width: 420, height: 900, touch: true },
+);
 
 let failed = 0;
 for (const { name, run, viewport } of checks) {

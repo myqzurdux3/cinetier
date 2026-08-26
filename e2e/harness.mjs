@@ -52,9 +52,9 @@ export function manyFilms(count) {
   ]);
 }
 
-export async function open({ width = 1280, height = 900 } = {}) {
+export async function open({ width = 1280, height = 900, touch = false } = {}) {
   const browser = await chromium.launch(EXECUTABLE ? { executablePath: EXECUTABLE } : {});
-  const context = await browser.newContext({ viewport: { width, height } });
+  const context = await browser.newContext({ viewport: { width, height }, hasTouch: touch });
   // Offline and deterministic. With no poster, every card's text *is* the
   // film's title, which is what the assertions below read.
   await context.route(/^https:\/\/(api\.themoviedb\.org|image\.tmdb\.org)/, (route) =>
@@ -88,7 +88,7 @@ export async function importLibrary(page, csv = ratingsCsv()) {
 /**
  * Press, move in small steps, release.
  *
- * The steps are not politeness: dnd-kit's PointerSensor activates on distance
+ * The steps are not politeness: dnd-kit's MouseSensor activates on distance
  * travelled and tracks the pointer between moves, so one jump from source to
  * target starts no drag at all.
  */
@@ -130,6 +130,73 @@ export async function drag(page, from, to, { steps = 24 } = {}) {
   await page.waitForTimeout(120);
   await page.mouse.up();
   await page.waitForTimeout(450);
+}
+
+/**
+ * Playwright's `page.touchscreen` taps and swipes, but cannot hold a finger
+ * down across several moves, which is exactly what a drag is. CDP can.
+ */
+const finger = async (page) => {
+  const session = await page.context().newCDPSession(page);
+  const at = (x, y) => [{ x, y }];
+  return {
+    down: (x, y) => session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(x, y) }),
+    move: (x, y) => session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(x, y) }),
+    up: () => session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }),
+  };
+};
+
+/**
+ * A finger drag: press, hold still, then move.
+ *
+ * The hold is the point. A touch that moves at once is a scroll — the pool is
+ * nothing but cards, so a finger must be able to scroll from one — and only a
+ * press held past the TouchSensor's delay becomes a drag. `hold` shorter than
+ * that delay is how the scroll case below is driven.
+ */
+export async function touchDrag(page, from, to, { steps = 24, hold = 350 } = {}) {
+  await from.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(120);
+  const a = await from.boundingBox();
+  const b = await to.boundingBox();
+  if (!a || !b) throw new Error('a drag endpoint has no box');
+  const viewport = await page.evaluate(() => innerHeight);
+  const [ax, ay] = [a.x + a.width / 2, a.y + a.height / 2];
+  if (ay < 0 || ay > viewport) {
+    throw new Error(`the card to drag is off screen at y=${Math.round(ay)}`);
+  }
+  const [bx, by] = [b.x + b.width / 2, visibleCentre(b, viewport)];
+
+  const touch = await finger(page);
+  await touch.down(ax, ay);
+  await page.waitForTimeout(hold);
+  for (let i = 1; i <= steps; i += 1) {
+    await touch.move(ax + ((bx - ax) * i) / steps, ay + ((by - ay) * i) / steps);
+    await page.waitForTimeout(16);
+  }
+  await page.waitForTimeout(120);
+  await touch.up();
+  await page.waitForTimeout(450);
+}
+
+/**
+ * A finger that moves as soon as it lands: the gesture a person makes to
+ * scroll. `dy` is negative to move content up, as a real swipe does.
+ */
+export async function touchSwipe(page, from, dy, { steps = 12 } = {}) {
+  await from.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(120);
+  const a = await from.boundingBox();
+  if (!a) throw new Error('the swipe has no starting box');
+  const [ax, ay] = [a.x + a.width / 2, a.y + a.height / 2];
+  const touch = await finger(page);
+  await touch.down(ax, ay);
+  for (let i = 1; i <= steps; i += 1) {
+    await touch.move(ax, ay + (dy * i) / steps);
+    await page.waitForTimeout(16);
+  }
+  await touch.up();
+  await page.waitForTimeout(300);
 }
 
 /** Row label -> its films in order, read from the DOM a person is looking at. */

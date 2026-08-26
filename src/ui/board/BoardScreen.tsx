@@ -3,7 +3,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   pointerWithin,
   useSensor,
@@ -75,10 +76,17 @@ export function BoardScreen({
   const activeFilm = activeId === null ? null : (byId.get(activeId) ?? null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       // Without a small distance, every click on a poster starts a drag and
       // the card never receives a plain click.
       activationConstraint: { distance: 4 },
+    }),
+    useSensor(TouchSensor, {
+      // A finger has to be able to scroll the pool, and the pool is nothing
+      // but cards — so a touch that moves straight away scrolls, and only a
+      // press held still for a moment becomes a drag. Tolerance is the drift
+      // allowed during that press: too tight and a steady thumb cancels it.
+      activationConstraint: { delay: 200, tolerance: 8 },
     }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
