@@ -15,7 +15,12 @@ export interface CinetierDB extends DBSchema {
   };
   library: {
     key: string;
-    value: { films: Film[]; savedAt: number };
+    /**
+     * `version` stamps the shape of `films`. Optional because records written
+     * before the stamp existed have none, and their shape is the one version 1
+     * describes — see services/library.ts.
+     */
+    value: { version?: number; films: Film[]; savedAt: number };
   };
   filters: {
     key: string;
@@ -57,7 +62,17 @@ const describeVersion = (version: number | null) =>
  * library that vanished. The console said what happened; nothing on the screen
  * did. This is how the screen gets to.
  */
-export type DatabaseStall = { reason: 'blocked'; openVersion: number } | null;
+export type DatabaseStall =
+  | { reason: 'blocked'; openVersion: number }
+  /**
+   * A stored record stamped by a build newer than this one. Reading it as
+   * today's shape is what a version stamp exists to prevent, so the read
+   * refuses — and refusing silently would put the user back on the import
+   * screen with their library apparently gone, which is the same lie the
+   * blocked case used to tell.
+   */
+  | { reason: 'newer'; store: string }
+  | null;
 
 let stall: DatabaseStall = null;
 const watchers = new Set<(stalled: DatabaseStall) => void>();
@@ -69,6 +84,11 @@ export const databaseStall = (): DatabaseStall => stall;
 export function watchDatabaseStall(watcher: (stalled: DatabaseStall) => void): () => void {
   watchers.add(watcher);
   return () => watchers.delete(watcher);
+}
+
+/** For the stores, which discover the second kind of stall on the way out. */
+export function reportDatabaseStall(next: DatabaseStall): void {
+  reportStall(next);
 }
 
 function reportStall(next: DatabaseStall): void {

@@ -6,10 +6,21 @@ import type { BoardAction } from '@/domain/board';
 interface PrefillPanelProps {
   board: TierBoard;
   films: Film[];
+  /**
+   * How many titles the filter rail is currently keeping out of the pool.
+   *
+   * Pre-fill reads the whole library, not the filtered view — thresholds are
+   * about ratings, not about what the rail happens to be showing. That is
+   * defensible and it is what the specification asks for; what is not
+   * defensible is doing it silently. With a filter admitting three of ten,
+   * pressing the button placed all ten and the pool dropped to "0 films to
+   * place", with seven titles the reader could not see moving without a word.
+   */
+  hiddenByFilters: number;
   dispatch: (action: BoardAction) => void;
 }
 
-export function PrefillPanel({ board, films, dispatch }: PrefillPanelProps) {
+export function PrefillPanel({ board, films, hiddenByFilters, dispatch }: PrefillPanelProps) {
   const groupId = useId();
 
   // What pre-filling would do right now, computed by running the real
@@ -68,6 +79,14 @@ export function PrefillPanel({ board, films, dispatch }: PrefillPanelProps) {
             </div>
           ))}
         </fieldset>
+
+        {hiddenByFilters > 0 && (
+          <p className="mt-2 text-sm text-ink-dim">
+            {hiddenByFilters === 1
+              ? '1 title the filters are hiding will be placed too — this reads your whole library.'
+              : `${String(hiddenByFilters)} titles the filters are hiding will be placed too — this reads your whole library.`}
+          </p>
+        )}
 
         {unratedCount > 0 && (
           <p className="mt-2 text-sm text-ink-dim">

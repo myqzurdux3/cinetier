@@ -142,9 +142,11 @@ effects and their writers, not the render tree.
 - **Persistence is all-or-nothing.** The library is saved only after enrichment completes,
   so closing the tab mid-enrichment loses the import. The poster cache survives, so the
   re-import is fast, but it must be repeated. Saving straight after parsing would close it.
-- **The stored library carries no schema version.** `{ films, savedAt }` will be read back as
-  today's `Film` shape whatever it actually holds. The specification asks for a versioned
-  envelope for JSON export; the same reasoning applies to the store.
+- ~~**The stored library carries no schema version.**~~ Closed on 2026-08-26. Records carry
+  `version`, an absent one reads as 1 (which is what everything already on disk is), and a
+  *higher* one is refused rather than misread — with a second `DatabaseNotice` reason
+  saying the page is out of date and to reload, since refusing silently would show the
+  import screen and look exactly like a library that vanished.
 - **TMDB payloads are cast, not runtime-narrowed.** A malformed response cannot throw — it
   flows through optional chaining into nulls — but it could produce a record that violates
   its own declared type. Worst case today is a broken image.
@@ -221,19 +223,15 @@ effects and their writers, not the render tree.
 
 ## Interface and copy
 
-- **A row's five edit controls are always on screen, on every row.** At 1280px they fit one
-  line and cost about thirty pixels a row; at 390px they wrap to three lines and a row
-  becomes 185px of mostly buttons. Collapsing them behind a per-row disclosure is the
-  obvious move, and the reason it was not done here is that jsdom does not hide the content
-  of a closed `<details>` from `getByRole` — every existing control test would keep passing
-  while clicking something a person cannot reach. Worth doing with that gap named and a
-  browser check standing in for it.
-- **Pre-fill reads the whole library, not the filtered view.** This is the decision the spec
-  took, and it is defensible — thresholds are about ratings, not about what the rail is
-  showing. What it looks like from the outside is less defensible: with a filter admitting
-  3 of 10 titles, pressing the button places all 10 and the pool drops to "0 films to
-  place", so seven titles the user cannot see moved without a word. The panel's summary now
-  states the count it will place, which helps; naming the set it draws from would help more.
+- ~~**A row's five edit controls are always on screen, on every row.**~~ Superseded: the
+  board's "Edit rows" toggle, added with the tier-board work, keeps every one of them off
+  the screen until asked for. Noticed as stale on 2026-08-26 while working through this
+  list — the entry predates the toggle.
+- ~~**Pre-fill reads the whole library, not the filtered view.**~~ The behaviour stands —
+  thresholds are about ratings, not about what the rail is showing — and as of 2026-08-26
+  it says so: with a filter hiding anything, the panel reads "7 titles the filters are
+  hiding will be placed too — this reads your whole library." The silence was the part that
+  was not defensible.
 
 - ~~**`LibrarySummary`'s progress is a conditionally mounted live region** — the pattern that
   was fixed in `DropZone` because screen readers frequently do not announce it. The naive

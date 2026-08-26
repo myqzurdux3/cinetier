@@ -708,7 +708,12 @@ export default function App() {
                 </div>
 
                 <div className={`${toolsOpen ? 'block' : 'hidden'} sm:block`}>
-                  <PrefillPanel board={boardValue} films={films} dispatch={dispatch} />
+                  <PrefillPanel
+                    board={boardValue}
+                    films={films}
+                    hiddenByFilters={films.length - visible.length}
+                    dispatch={dispatch}
+                  />
                 </div>
 
                 <BoardScreen
