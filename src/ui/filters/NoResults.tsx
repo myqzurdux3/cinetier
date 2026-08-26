@@ -2,6 +2,7 @@ import {
   describeCriterion,
   mostRestrictiveCriterion,
   withoutCriterion,
+  type CriterionKey,
   type FilterCriteria,
 } from '@/domain/filters';
 import type { Film } from '@/domain/film';
@@ -23,7 +24,6 @@ const ACTION =
  */
 export function NoResults({ films, criteria, onChange }: NoResultsProps) {
   const culprit = mostRestrictiveCriterion(films, criteria);
-  const description = culprit ? describeCriterion(culprit, criteria) : null;
 
   /**
    * Removing a criterion here almost always brings results back, which
@@ -40,21 +40,34 @@ export function NoResults({ films, criteria, onChange }: NoResultsProps) {
     document.getElementById(FILTER_STATUS_ID)?.focus();
   }
 
+  function blame(key: CriterionKey) {
+    const description = describeCriterion(key, criteria);
+    return (
+      <>
+        <p className="text-sm text-ink-dim">{description} is cutting the most.</p>
+        <button
+          type="button"
+          onClick={() => removeAndRefocus(withoutCriterion(criteria, key))}
+          className={ACTION}
+        >
+          Remove {description}
+        </button>
+      </>
+    );
+  }
+
   return (
     <div className="space-y-3 rounded-card bg-surface px-5 py-10 text-center">
       <p className="font-display text-lg text-ink">Nothing matches these filters.</p>
 
-      {culprit && description ? (
-        <>
-          <p className="text-sm text-ink-dim">{description} is cutting the most.</p>
-          <button
-            type="button"
-            onClick={() => removeAndRefocus(withoutCriterion(criteria, culprit))}
-            className={ACTION}
-          >
-            Remove {description}
-          </button>
-        </>
+      {/*
+        `describeCriterion` returns a string for every key, so the description
+        was non-null exactly when the culprit was — the pair of them were
+        guarded together, which read as though either could be missing on its
+        own. Computed where the key is known instead.
+      */}
+      {culprit !== null ? (
+        blame(culprit)
       ) : (
         <p className="text-sm text-ink-dim">
           No single filter explains it — several are combining to exclude everything.

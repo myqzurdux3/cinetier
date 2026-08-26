@@ -121,9 +121,10 @@ effects and their writers, not the render tree.
   the user replaced or discarded the library — and stays shared by the library and filters
   restores. A test drives the race directly: a slow `loadFilters()`, a real board edit
   before it resolves, and the criteria still apply afterwards.
-- **A rejected enrichment leaves the progress counter on screen.** It logs, and the reset
-  button is always reachable, so nobody is trapped — but the interface says it is still
-  working when it has stopped.
+- ~~**A rejected enrichment leaves the progress counter on screen.**~~ Closed on 2026-08-26:
+  both passes clear their own counters on the way out, guarded on the run id so a failure
+  arriving after a reset cannot wipe the progress of whatever is running now. The error is
+  still rethrown to the caller that logs it.
 - ~~**A failed IndexedDB open is cached for the session.**~~ Closed on 2026-08-26: the
   open now clears the memoised promise on rejection and rethrows, so the failure still
   reaches its caller and the next call tries again.
@@ -147,7 +148,7 @@ effects and their writers, not the render tree.
 - **TMDB payloads are cast, not runtime-narrowed.** A malformed response cannot throw — it
   flows through optional chaining into nulls — but it could produce a record that violates
   its own declared type. Worst case today is a broken image.
-- **`imdbId` is interpolated into the TMDB URL path unencoded**, unlike the title.
+- ~~**`imdbId` is interpolated into the TMDB URL path unencoded**~~ Closed on 2026-08-26.
 - **A failed detail lookup is cached as "TMDB had nothing"** for thirty days, the
   same rule the poster cache follows. A title that failed because the network
   dropped will not be asked about again for a month.
@@ -157,10 +158,13 @@ effects and their writers, not the render tree.
   `searchByTitle` instead, can pick up a `tmdbId`, and reaches the pass after
   all — harmlessly, since `enrichDetails` falls back to the `/movie` endpoint
   for anything it doesn't recognize as television.
-- **`reset()` does not reset `railOpen`**, and calls `clearFilters()` unconditionally even
-  when nothing was ever saved.
-- **`NoResults.tsx`'s `culprit && description` is a redundant double guard** —
-  `description` is non-null exactly when `culprit` is.
+- ~~**`reset()` does not reset `railOpen`**~~ Closed on 2026-08-26, along with the board
+  tool tray added the same day. The unconditional `clearFilters()` stays: deleting a key
+  that was never written costs one request and no correctness, and the state needed to
+  avoid it would be a new source of truth to keep right.
+- ~~**`NoResults.tsx`'s `culprit && description` is a redundant double guard**~~ Closed on
+  2026-08-26: the description is computed where the key is known, so there is no nullable
+  second variable to guard.
 
 ## Performance
 

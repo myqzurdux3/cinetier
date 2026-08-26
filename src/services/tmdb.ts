@@ -65,7 +65,11 @@ function key(): string {
  * every imported series with no artwork at all.
  */
 export async function lookupByImdbId(imdbId: string): Promise<TmdbMatch | null> {
-  const payload = await getJson(`${BASE}/find/${imdbId}?api_key=${key()}&external_source=imdb_id`);
+  // Encoded like every other user-supplied value that reaches a URL. An IMDb
+  // id is `tt` and digits in every export seen so far, but this one comes out
+  // of a CSV the user chose, and the title beside it has always been encoded.
+  const path = `${BASE}/find/${encodeURIComponent(imdbId)}`;
+  const payload = await getJson(`${path}?api_key=${key()}&external_source=imdb_id`);
   const found = payload as {
     movie_results?: TmdbMovieSummary[];
     tv_results?: TmdbMovieSummary[];
