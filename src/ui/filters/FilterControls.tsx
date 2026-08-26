@@ -67,11 +67,27 @@ export function RatingControls({ criteria, onChange }: ControlsProps) {
   );
 }
 
+/**
+ * Everything the library offers, plus anything already chosen that it does not.
+ *
+ * `services/filters.ts` restores a saved criterion whether or not this library
+ * still holds a film matching it — deliberately, so switching libraries does
+ * not silently drop what you filtered by. A chosen value with nothing behind
+ * it is therefore a real state, and dropping its checkbox left the status chip
+ * as the only way to undo it. DirectorControls has always kept its selection
+ * on screen; these three did not.
+ */
+function withChosen<T extends string | number>(available: T[], chosen: T[] | undefined): T[] {
+  return [...new Set([...available, ...(chosen ?? [])])];
+}
+
 export function EraControls({ films, criteria, onChange }: ControlsProps) {
-  const options = availableDecades(films).map((decade) => ({
-    value: decade,
-    label: `${decade}s`,
-  }));
+  const options = withChosen(availableDecades(films), criteria.decades)
+    .sort((a, b) => a - b)
+    .map((decade) => ({
+      value: decade,
+      label: `${decade}s`,
+    }));
 
   return (
     <CheckboxList
@@ -83,7 +99,7 @@ export function EraControls({ films, criteria, onChange }: ControlsProps) {
 }
 
 export function TypeControls({ films, criteria, onChange }: ControlsProps) {
-  const options = availableTitleTypes(films)
+  const options = withChosen(availableTitleTypes(films), criteria.titleTypes)
     .map((type) => ({ value: type, label: TITLE_TYPE_LABELS[type].many }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
@@ -97,7 +113,9 @@ export function TypeControls({ films, criteria, onChange }: ControlsProps) {
 }
 
 export function GenreControls({ films, criteria, onChange }: ControlsProps) {
-  const options = availableGenres(films).map((genre) => ({ value: genre, label: genre }));
+  const options = withChosen(availableGenres(films), criteria.genres)
+    .sort((a, b) => a.localeCompare(b))
+    .map((genre) => ({ value: genre, label: genre }));
 
   return (
     <CheckboxList

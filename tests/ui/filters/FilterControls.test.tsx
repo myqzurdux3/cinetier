@@ -12,6 +12,7 @@ import {
   TopNControls,
 } from '@/ui/filters/FilterControls';
 import { makeFilm } from '../../support/film';
+import { TITLE_TYPE_LABELS } from '@/domain/titleType';
 
 const library = [
   makeFilm({ title: 'Heat', year: 1995, titleType: 'movie' }),
@@ -193,6 +194,34 @@ describe('WatchedControls', () => {
   });
 });
 
+describe('a criterion the library no longer holds', () => {
+  // filters.ts restores a saved criterion whether or not this library has a
+  // film matching it. Three of the four controls dropped that checkbox, which
+  // left the status chip as the only way to undo a filter — and the control
+  // that set it saying nothing was set.
+  it('keeps the chosen genre on screen so it can be unticked', () => {
+    const onChange = vi.fn();
+    render(
+      <GenreControls films={detailed} criteria={{ genres: ['Bollywood'] }} onChange={onChange} />,
+    );
+
+    const box = screen.getByLabelText('Bollywood');
+    expect(box).toBeChecked();
+  });
+
+  it('keeps the chosen decade on screen', () => {
+    render(<EraControls films={detailed} criteria={{ decades: [1920] }} onChange={vi.fn()} />);
+    expect(screen.getByLabelText('1920s')).toBeChecked();
+  });
+
+  it('keeps the chosen title type on screen', () => {
+    render(
+      <TypeControls films={detailed} criteria={{ titleTypes: ['short'] }} onChange={vi.fn()} />,
+    );
+    expect(screen.getByLabelText(TITLE_TYPE_LABELS.short.many)).toBeChecked();
+  });
+});
+
 describe('TopNControls', () => {
   it('keeps only the highest rated N', () => {
     const onChange = vi.fn();
@@ -201,5 +230,17 @@ describe('TopNControls', () => {
     fireEvent.change(screen.getByLabelText('Keep the top'), { target: { value: '25' } });
 
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ topN: 25 }));
+  });
+
+  it('will not be typed below one', () => {
+    // `min={1}` on a number input marks the field invalid and stops the
+    // spinner; it does nothing about a typed digit. "Keep the top 0" was
+    // reachable that way, and it empties the pool.
+    const onChange = vi.fn();
+    render(<TopNControls films={detailed} criteria={{}} onChange={onChange} />);
+
+    fireEvent.change(screen.getByLabelText('Keep the top'), { target: { value: '0' } });
+
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ topN: 1 }));
   });
 });

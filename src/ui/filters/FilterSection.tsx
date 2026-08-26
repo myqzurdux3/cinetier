@@ -31,7 +31,12 @@ export function FilterSection({
 }: FilterSectionProps) {
   return (
     <details open={defaultOpen} className="rounded-card border border-line bg-surface">
-      <summary className="flex cursor-pointer items-baseline justify-between gap-2 px-3 py-2 font-display text-sm uppercase tracking-widest text-ink">
+      {/*
+        The accent ring, like every other focusable thing in the rail. A
+        closed section's summary is its only keyboard-operable part, and it
+        was the one control still wearing the browser's own outline.
+      */}
+      <summary className="flex cursor-pointer items-baseline justify-between gap-2 rounded-card px-3 py-2 font-display text-sm uppercase tracking-widest text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <span>{title}</span>
         <span className="text-xs text-ink-dim">
           {count === total ? total : `${count} / ${total}`}

@@ -25,7 +25,7 @@ export function CheckboxList<T extends string | number>({
                     : selected.filter((value) => value !== option.value),
                 )
               }
-              className="accent-accent"
+              className="accent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
             <span>{option.label}</span>
           </label>
