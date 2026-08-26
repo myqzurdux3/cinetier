@@ -39,7 +39,7 @@ jobs:
       # It is installed here, where it is actually used, and the browser is
       # cached between runs.
       - name: Cache the browser
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ hashFiles('package-lock.json') }}
