@@ -31,6 +31,26 @@ describe('DatabaseNotice', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
+  it('tells a page that is out of date apart from one that is waiting', async () => {
+    // Two different problems with the same symptom — the library is not there
+    // — and two different things to do about them. Saying "close the other
+    // tab" to someone running a stale bundle would send them nowhere.
+    openDBMock.mockImplementation(() => Promise.resolve({ close: vi.fn() }));
+    const { DatabaseNotice } = await import('@/ui/DatabaseNotice');
+    const { reportDatabaseStall } = await import('@/services/db');
+
+    render(<DatabaseNotice />);
+    act(() => {
+      reportDatabaseStall({ reason: 'newer', store: 'library' });
+    });
+
+    const text = screen.getByRole('status').textContent ?? '';
+    expect(text).toMatch(/out of date/i);
+    expect(text).toMatch(/reload/i);
+    expect(text).toMatch(/nothing has been lost/i);
+    expect(text).not.toMatch(/another tab/i);
+  });
+
   it('explains a blocked upgrade, and takes itself away once it goes through', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     let callbacks: Callbacks = {};

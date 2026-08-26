@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { openDB, type DBSchema } from 'idb';
-import { saveLibrary, loadLibrary, clearLibrary } from '@/services/library';
-import { db, resetDatabase } from '@/services/db';
+import { saveLibrary, loadLibrary, clearLibrary, LIBRARY_VERSION } from '@/services/library';
+import { databaseStall, db, resetDatabase } from '@/services/db';
 import type { Film } from '@/domain/film';
 
 function film(id: string, watchedAt: Date | null = null): Film {
@@ -108,5 +108,44 @@ describe('the v1 to v2 schema upgrade', () => {
     const restored = await upgraded.get('library', 'current');
     expect(restored?.films.map((f) => f.id)).toEqual(['a', 'b']);
     expect(restored?.savedAt).toBe(saved.savedAt);
+  });
+});
+
+describe('the saved library carries the shape it was written in', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it('stamps a version on the way out', async () => {
+    await saveLibrary([film('a')]);
+    const raw = await (await db()).get('library', 'current');
+    expect(raw?.version).toBe(LIBRARY_VERSION);
+  });
+
+  it('reads a record with no version at all, which is what is already on disk', async () => {
+    // Everything saved before the stamp existed. Its shape is the one version
+    // 1 describes, so refusing it would strand every existing user.
+    await (await db()).put('library', { films: [film('a')], savedAt: Date.now() }, 'current');
+    expect(await loadLibrary()).toHaveLength(1);
+  });
+
+  it('refuses a record from a newer build, and says why on screen', async () => {
+    // Two tabs, or a stale cached bundle. Reading a newer shape as this one is
+    // the silent corruption the stamp exists to prevent — and refusing without
+    // saying so would show the import screen, which looks exactly like a
+    // library that vanished.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await (
+      await db()
+    ).put(
+      'library',
+      { version: LIBRARY_VERSION + 1, films: [film('a')], savedAt: Date.now() },
+      'current',
+    );
+
+    expect(await loadLibrary()).toBeNull();
+    expect(databaseStall()).toEqual({ reason: 'newer', store: 'library' });
+
+    consoleError.mockRestore();
   });
 });

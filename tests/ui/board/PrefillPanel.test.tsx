@@ -17,6 +17,7 @@ function renderPanel(overrides: Partial<Parameters<typeof PrefillPanel>[0]> = {}
     <PrefillPanel
       board={createBoard('b1', 'Mine')}
       films={films}
+      hiddenByFilters={0}
       dispatch={dispatch}
       {...overrides}
     />,
@@ -25,6 +26,21 @@ function renderPanel(overrides: Partial<Parameters<typeof PrefillPanel>[0]> = {}
 }
 
 describe('PrefillPanel', () => {
+  it('says when it will place titles the filters are hiding', async () => {
+    // Pre-fill reads the whole library, not the filtered view — deliberate,
+    // and what the specification asks for. Doing it silently is what was not
+    // defensible: with a filter admitting three of ten, the button placed all
+    // ten and the pool dropped to "0 films to place" without a word.
+    renderPanel({ hiddenByFilters: 7 });
+    expect(screen.getByText(/7 titles the filters are hiding/i)).toBeInTheDocument();
+    expect(screen.getByText(/your whole library/i)).toBeInTheDocument();
+  });
+
+  it('says nothing about filters when none are hiding anything', () => {
+    renderPanel();
+    expect(screen.queryByText(/filters are hiding/i)).not.toBeInTheDocument();
+  });
+
   it('shows how many pooled films each threshold would place', () => {
     renderPanel();
     expect(screen.getByRole('group', { name: /thresholds/i })).toBeInTheDocument();
