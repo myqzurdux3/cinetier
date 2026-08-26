@@ -149,9 +149,13 @@ effects and their writers, not the render tree.
   flows through optional chaining into nulls — but it could produce a record that violates
   its own declared type. Worst case today is a broken image.
 - ~~**`imdbId` is interpolated into the TMDB URL path unencoded**~~ Closed on 2026-08-26.
-- **A failed detail lookup is cached as "TMDB had nothing"** for thirty days, the
-  same rule the poster cache follows. A title that failed because the network
-  dropped will not be asked about again for a month.
+- ~~**A failed detail lookup is cached as "TMDB had nothing"** for thirty days, the
+  same rule the poster cache follows.~~ Closed on 2026-08-26, for both caches. `getJson`
+  now separates an answer from a refusal: a 404 means this identifier names nothing and
+  is still cached, while a network failure, a 5xx, a rate limit or a refused key throws
+  `TmdbUnavailable`. Both enrichment passes catch that one error, skip the write and
+  carry on, so the title is asked about again next time instead of being silenced for a
+  month. Anything else still propagates.
 - **An episode with an imdbId never gets details.** `lookupByImdbId` reads
   `movie_results` and `tv_results` only, so such an episode carries no
   `tmdbId` and the pass skips it. An episode with no imdbId is matched by

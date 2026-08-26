@@ -1,6 +1,11 @@
 import type { Film } from '@/domain/film';
 import type { TitleType } from '@/domain/titleType';
-import { fetchMovieDetails, fetchTvDetails, type TmdbDetails } from '@/services/tmdb';
+import {
+  fetchMovieDetails,
+  fetchTvDetails,
+  TmdbUnavailable,
+  type TmdbDetails,
+} from '@/services/tmdb';
 import { getCachedDetails, putCachedDetails } from '@/services/tmdbDetailsCache';
 
 export interface DetailsProgress {
@@ -47,9 +52,17 @@ async function resolveDetails(film: Film): Promise<TmdbDetails | null> {
   const cached = await getCachedDetails(key);
   if (cached !== undefined) return cached;
 
-  const details = kind === 'tv' ? await fetchTvDetails(tmdbId) : await fetchMovieDetails(tmdbId);
-  await putCachedDetails(key, details);
-  return details;
+  try {
+    const details = kind === 'tv' ? await fetchTvDetails(tmdbId) : await fetchMovieDetails(tmdbId);
+    await putCachedDetails(key, details);
+    return details;
+  } catch (error) {
+    // See enrichLibrary's resolve(): an unreachable TMDB is not an answer, and
+    // caching it as one would hold this title's genres and runtime back for
+    // thirty days.
+    if (!(error instanceof TmdbUnavailable)) throw error;
+    return null;
+  }
 }
 
 /**

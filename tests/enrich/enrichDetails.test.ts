@@ -3,14 +3,22 @@ import 'fake-indexeddb/auto';
 import { enrichDetails, countPendingDetails } from '@/enrich/enrichDetails';
 import { resetDatabase } from '@/services/db';
 import { makeFilm } from '../support/film';
+import type * as TmdbModule from '@/services/tmdb';
 
 const fetchMovieDetails = vi.fn();
 const fetchTvDetails = vi.fn();
 
-vi.mock('@/services/tmdb', () => ({
-  fetchMovieDetails: (id: number) => fetchMovieDetails(id) as unknown,
-  fetchTvDetails: (id: number) => fetchTvDetails(id) as unknown,
-}));
+// The real module is spread in, not replaced wholesale: `TmdbUnavailable` is a
+// class the code under test compares against with `instanceof`, so a mock that
+// leaves it out makes that check throw rather than fail.
+vi.mock('@/services/tmdb', async () => {
+  const actual = await vi.importActual<typeof TmdbModule>('@/services/tmdb');
+  return {
+    ...actual,
+    fetchMovieDetails: (id: number) => fetchMovieDetails(id) as unknown,
+    fetchTvDetails: (id: number) => fetchTvDetails(id) as unknown,
+  };
+});
 
 beforeEach(async () => {
   await resetDatabase();
@@ -25,6 +33,35 @@ beforeEach(async () => {
     genres: ['Crime'],
     runtimeMinutes: 47,
     directors: ['Vince Gilligan'],
+  });
+});
+
+describe('enrichDetails when TMDB cannot be reached', () => {
+  it('leaves the cache untouched so the title is asked about again', async () => {
+    // Genres and runtimes are cached for thirty days like posters, and a
+    // failed request used to be stored as the same null a definitive "TMDB has
+    // nothing" is. One dropped connection held a title's details back for a
+    // month.
+    const { TmdbUnavailable } = await import('@/services/tmdb');
+    const { getCachedDetails } = await import('@/services/tmdbDetailsCache');
+    const film = makeFilm({ title: 'Heat', tmdbId: 949 });
+
+    fetchMovieDetails.mockRejectedValue(new TmdbUnavailable('the network dropped'));
+    const first = await enrichDetails([film], () => {});
+
+    // The pass still finishes, and the film is left unmarked so a later visit
+    // tries again.
+    expect(first).toHaveLength(1);
+    expect(first[0]!.detailsFetched).toBe(false);
+    expect(await getCachedDetails('movie:949')).toBeUndefined();
+
+    fetchMovieDetails.mockResolvedValue({
+      genres: ['Crime'],
+      runtimeMinutes: 170,
+      directors: ['Michael Mann'],
+    });
+    const second = await enrichDetails([film], () => {});
+    expect(second[0]!.genres).toEqual(['Crime']);
   });
 });
 
