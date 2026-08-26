@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { DatabaseNotice } from './DatabaseNotice';
 import { Logo } from './Logo';
 import { PageTexture } from './PageTexture';
 import { ThemeToggle } from './theme/ThemeToggle';
@@ -19,6 +20,13 @@ export function Shell({ children }: ShellProps) {
         </span>
         <ThemeToggle />
       </header>
+
+      {/* Above every screen rather than inside one: the stall it reports is
+          at its most misleading on the import screen, which is where a user
+          whose library is merely unreachable ends up. */}
+      <div className="relative z-10 px-6 pt-4 empty:hidden">
+        <DatabaseNotice />
+      </div>
 
       <main className="relative z-10 flex-1">{children}</main>
 
