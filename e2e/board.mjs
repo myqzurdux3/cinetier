@@ -579,6 +579,7 @@ check('a damaged file is refused with something to do about it', async (page) =>
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: /IMDb/ }).click();
   await page.waitForSelector('input[type=file]');
+  await page.focus('input[type=file]');
   await page.setInputFiles('input[type=file]', {
     name: 'broken.json',
     mimeType: 'application/json',
@@ -590,6 +591,16 @@ check('a damaged file is refused with something to do about it', async (page) =>
   if (!/not a Cinetier export/i.test(text))
     throw new Error(`no explanation: ${text.slice(0, 160)}`);
   if (!/Save as a file/i.test(text)) throw new Error('no hint about where such a file comes from');
+
+  // The file input is disabled for the length of the read, and disabling the
+  // focused element blurs it — focus fell to <body> and stayed there, so a
+  // keyboard user who chose the wrong file had to tab the page from the top to
+  // get back to it. Asserted here rather than in jsdom, which does not blur a
+  // disabled element and so cannot reproduce this at all.
+  const landed = await page.evaluate(() => document.activeElement?.tagName ?? 'NOTHING');
+  if (landed === 'BODY' || landed === 'NOTHING') {
+    throw new Error('choosing a file dropped keyboard focus onto the document');
+  }
 });
 
 check(

@@ -60,11 +60,11 @@ describe('FilmGrid', () => {
     }
   });
 
-  it('plays the entrance once per import, not on every render', async () => {
+  it('plays the entrance once, and not again on a later render', async () => {
     // The grid is virtualized: rows scrolled into view later must not animate,
     // or a long library flickers for as long as the reader keeps scrolling.
     const films = Array.from({ length: 12 }, (_, i) => film(`f${i}`));
-    const { container, rerender } = render(<FilmGrid films={films} generation={1} />);
+    const { container, rerender } = render(<FilmGrid films={films} />);
     expect(container.querySelectorAll('[data-entering="true"]').length).toBeGreaterThan(0);
 
     // The entrance clears itself inside a requestAnimationFrame callback, which
@@ -78,11 +78,8 @@ describe('FilmGrid', () => {
       expect(container.querySelectorAll('[data-entering="true"]').length).toBe(0);
     });
 
-    rerender(<FilmGrid films={films} generation={1} />);
+    rerender(<FilmGrid films={films} />);
     expect(container.querySelectorAll('[data-entering="true"]').length).toBe(0);
-
-    rerender(<FilmGrid films={films} generation={2} />);
-    expect(container.querySelectorAll('[data-entering="true"]').length).toBeGreaterThan(0);
   });
 
   it('gates every entrance-state class behind motion-safe, not just the transition itself', () => {
@@ -94,7 +91,7 @@ describe('FilmGrid', () => {
     // targeting data-[entering=true] must carry the motion-safe: prefix, or
     // reduced-motion readers get an unanimated flash instead of no entrance.
     const films = [film('a')];
-    const { container } = render(<FilmGrid films={films} generation={1} />);
+    const { container } = render(<FilmGrid films={films} />);
     const entering = container.querySelector('[data-entering="true"]');
     expect(entering).not.toBeNull();
 
@@ -112,7 +109,7 @@ describe('FilmGrid', () => {
     // viewport, must see it already cleared. Otherwise a long library
     // flickers for as long as the reader keeps scrolling.
     const films = Array.from({ length: 400 }, (_, i) => film(`f${i}`));
-    const { container } = render(<FilmGrid films={films} columns={8} generation={1} />);
+    const { container } = render(<FilmGrid films={films} columns={8} />);
 
     await waitFor(() => {
       expect(container.querySelectorAll('[data-entering="true"]').length).toBe(0);
@@ -151,7 +148,7 @@ describe('FilmGrid', () => {
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
     const films = Array.from({ length: 20 }, (_, i) => film(`f${i}`));
-    const { container } = render(<FilmGrid films={films} generation={1} />);
+    const { container } = render(<FilmGrid films={films} />);
 
     // No columns prop: the grid starts at the desktop default (8) …
     const row = () => container.querySelector('[style*="grid-template-columns"]') as HTMLElement;
